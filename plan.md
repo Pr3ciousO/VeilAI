@@ -166,15 +166,14 @@ VeilAI/
 
 **Goal:** escrow releases to provider on verify, refunds on reject — automatically after commit.
 
-- [ ] `settle_payment` `#[action]` handler — transfer USDC from escrow vault to provider ATA, bump reputation, status `Settled`
-- [ ] **Auth:** require injected `escrow` as `signer`, pinned to `ephemeral_balance_pda_from_payer(escrow_auth, 255)` (NOT just `address = crate::ID`)
-- [ ] **Idempotency:** guard on `Job.settlement_id`; refuse double-settle (`AlreadySettled`)
-- [ ] `refund_escrow` path for `Rejected` jobs (creator gets funds back)
-- [ ] `commit_and_settle` (ER) — `MagicIntentBundleBuilder … .commit_and_undelegate(job) .add_post_commit_actions([settle_or_refund]) .build_and_invoke()`
-- [ ] Include destination program in outer commit context; set `is_writable` correctly per action account
-- [ ] Handle commit fee limits (re-delegate to reset nonce, or `magic_fee_vault` for high frequency)
-- [ ] Model `settling` vs `settled`; observe base-layer effect before marking paid (don't trust ER sig alone)
-- [ ] Tests: verified → paid; rejected → refunded; action-dropped-on-retry recovery; direct-call attack on handler rejected
+- [x] `settle_payment_direct` / `refund_escrow_direct` — shared `do_settle`/`do_refund` fns; USDC escrow → provider (verified) or creator (rejected); bump reputation; status `Settled` — `settlement.rs`
+- [x] **Idempotency:** `Job.settled` flag guards double-settle (`AlreadySettled`); status guards (`Verified`→settle, `Rejected`→refund)
+- [x] Escrow vault authority is the `["escrow-auth", job]` PDA, signs transfers via seeds; caller must be provider or creator
+- [x] Fixed BPF stack-frame overflow by `Box`-ing token accounts + passing mint as `AccountInfo`+decimals
+- [x] Tests (**2 passing**): verified → provider paid (balance asserted); rejected → creator refunded. Full suite **10 passing**.
+- [ ] ⏳ Magic Action auto-settle: `settle_payment`/`refund_escrow` `#[action]` entrypoints (escrow-signer auth) + `commit_and_settle` ER (`MagicIntentBundleBuilder.commit_and_undelegate + add_post_commit_actions`) — **deferred to devnet integration** (Magic Actions only run on the ER; two-entrypoint pattern over the shared fn, per skill guidance). Direct path above is the robust fallback the demo relies on.
+
+> **Phase 4 decision:** the economic guarantee (proof-before-payment: verified→paid, rejected→refunded, idempotent) is fully implemented and locally tested via the direct Signer-authorized entrypoints. The *auto-settle-on-commit* Magic Action is a delivery mechanism layered on top; it's wired during live devnet integration (Phase 7) since it can't be exercised without a real Ephemeral Rollup.
 
 ---
 

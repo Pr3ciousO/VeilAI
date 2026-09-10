@@ -11,11 +11,14 @@
     "test": "echo \"(no backend tests yet)\""
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.68.0",
     "@coral-xyz/anchor": "0.32.1",
     "@magicblock-labs/ephemeral-rollups-sdk": "0.15.5",
     "@solana/web3.js": "^1.98.0",
     "@solana/spl-token": "^0.4.9",
+    "@supabase/supabase-js": "^2.47.10",
     "@veilai/shared": "workspace:*",
+    "bs58": "^6.0.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
