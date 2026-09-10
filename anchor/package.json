@@ -18,6 +18,7 @@
     "chai": "^5.1.2",
     "mocha": "^11.0.1",
     "ts-mocha": "^11.1.0",
+    "tweetnacl": "^1.0.3",
     "typescript": "^5.7.2"
   }
 }
