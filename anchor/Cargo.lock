@@ -4223,6 +4223,8 @@ dependencies = [
  "anchor-lang",
  "anchor-spl",
  "ephemeral-rollups-sdk",
+ "sha2 0.10.9",
+ "solana-instructions-sysvar 3.0.1",
 ]
 
 [[package]]

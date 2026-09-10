@@ -1,7 +1,10 @@
 use crate::errors::VeilError;
 use anchor_lang::prelude::*;
-use anchor_lang::solana_program::ed25519_program;
-use anchor_lang::solana_program::sysvar::instructions::load_instruction_at_checked;
+use solana_instructions_sysvar::load_instruction_at_checked;
+
+/// Ed25519 native precompile program id.
+pub const ED25519_PROGRAM_ID: Pubkey =
+    Pubkey::from_str_const("Ed25519SigVerify111111111111111111111111111");
 
 /// One Ed25519 precompile signature-offsets record starts after
 /// [num_signatures:u8][padding:u8]. See the Solana Ed25519 program format.
@@ -34,7 +37,7 @@ pub fn extract_verified_ed25519(
 ) -> Result<VerifiedEd25519> {
     let ix = load_instruction_at_checked(ix_index, instructions_sysvar)
         .map_err(|_| VeilError::QuoteInvalid)?;
-    require_keys_eq!(ix.program_id, ed25519_program::ID, VeilError::QuoteInvalid);
+    require_keys_eq!(ix.program_id, ED25519_PROGRAM_ID, VeilError::QuoteInvalid);
 
     let data = &ix.data;
     let num_sigs = *data.first().ok_or(VeilError::QuoteInvalid)?;

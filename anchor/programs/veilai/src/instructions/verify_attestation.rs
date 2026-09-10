@@ -3,8 +3,19 @@ use crate::ed25519::extract_verified_ed25519;
 use crate::errors::VeilError;
 use crate::state::{AttestationStatus, Job, JobStatus};
 use anchor_lang::prelude::*;
-use anchor_lang::solana_program::hash::hashv;
-use anchor_lang::solana_program::sysvar::instructions::ID as INSTRUCTIONS_SYSVAR_ID;
+use sha2::{Digest, Sha256};
+
+/// Instructions sysvar program id.
+const INSTRUCTIONS_SYSVAR_ID: Pubkey =
+    Pubkey::from_str_const("Sysvar1nstructions1111111111111111111111111");
+
+fn sha256_concat(parts: &[&[u8]]) -> [u8; 32] {
+    let mut h = Sha256::new();
+    for p in parts {
+        h.update(p);
+    }
+    h.finalize().into()
+}
 
 #[event]
 pub struct AttestationVerified {
@@ -46,14 +57,14 @@ pub fn handler(
     let job = &ctx.accounts.job;
 
     // report_data = sha256(input ‖ output ‖ model_id ‖ nonce)
-    let report_data = hashv(&[
+    let report_data = sha256_concat(&[
         &job.input_commitment,
         &output_commitment,
         job.model_id.as_bytes(),
         &job.nonce,
     ]);
     // signed_message = sha256(report_data ‖ mrtd) — measurement bound to the sig.
-    let signed_message = hashv(&[report_data.as_ref(), &mrtd]);
+    let signed_message = sha256_concat(&[&report_data, &mrtd]);
 
     let verified = extract_verified_ed25519(
         &ctx.accounts.instructions_sysvar,
@@ -61,7 +72,7 @@ pub fn handler(
     )?;
 
     let key_ok = verified.pubkey == job.quoting_key;
-    let msg_ok = verified.message.as_slice() == signed_message.as_ref();
+    let msg_ok = verified.message.as_slice() == signed_message.as_slice();
     let sig_ok = verified.signature == signature;
     let measurement_ok = mrtd == job.expected_measurement;
 
