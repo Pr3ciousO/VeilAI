@@ -4,6 +4,7 @@ packages:
   - "frontend"
   - "anchor"
 allowBuilds:
+  "@reown/appkit": false
   "@stellar/stellar-sdk": false
   bigint-buffer: true
   blake-hash: true

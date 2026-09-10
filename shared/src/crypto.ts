@@ -81,6 +81,11 @@ export function edPublicFromSecret(secret: Uint8Array): string {
   return bs58.encode(ed25519.getPublicKey(secret));
 }
 
+/** x25519 public key (base58) from a 32-byte secret. */
+export function x25519PublicFromSecret(secret: Uint8Array): string {
+  return bs58.encode(x25519.getPublicKey(secret));
+}
+
 export function edVerify(pubB58: string, sig: Uint8Array, msg: Uint8Array): boolean {
   return ed25519.verify(sig, msg, bs58.decode(pubB58));
 }

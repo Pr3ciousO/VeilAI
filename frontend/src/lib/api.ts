@@ -47,6 +47,28 @@ export interface Job {
   created_at: string;
 }
 
+export interface SealedBoxDTO {
+  epk: string;
+  nonce: string;
+  ct: string;
+}
+
+export interface CreateJobBody {
+  id: string;
+  jobId: number;
+  creator: string;
+  agentId: string;
+  provider: string;
+  title?: string;
+  budget: number;
+  promptCiphertextCommitment: string;
+  inputCommitment: string;
+  expectedMeasurement: string;
+  nonce: string;
+  settlementId: string;
+  promptCiphertext: SealedBoxDTO;
+}
+
 export const api = {
   health: () => req<{ status: string; db: boolean }>("/health"),
   agents: () => req<{ agents: Agent[] }>("/agents"),
@@ -54,10 +76,21 @@ export const api = {
   jobs: (creator?: string) =>
     req<{ jobs: Job[] }>(`/jobs${creator ? `?creator=${creator}` : ""}`),
   job: (id: string) => req<{ job: Job }>(`/jobs/${id}`),
+  jobsCreate: (body: CreateJobBody) =>
+    req<{ job: Job }>("/jobs", { method: "POST", body: JSON.stringify(body) }),
   enclavePubkey: () => req<{ x25519PublicKey: string }>("/jobs/enclave/pubkey"),
   execute: (id: string, userPublicKey: string) =>
     req<{ ok: boolean; verified: boolean; outputCommitment: string }>(
       `/jobs/${id}/execute`,
       { method: "POST", body: JSON.stringify({ userPublicKey }) },
     ),
+  result: (id: string) =>
+    req<{
+      result: {
+        id: string;
+        status: string;
+        output_commitment: string | null;
+        output_ciphertext: SealedBoxDTO | null;
+      };
+    }>(`/jobs/${id}/result`),
 };
