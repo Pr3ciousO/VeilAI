@@ -74,17 +74,19 @@ VeilAI/
 
 **Goal:** create/escrow/track a job on base layer with all state and guards. No MagicBlock yet.
 
-- [ ] `anchor init veilai`; set `Cargo.toml` deps (anchor-lang 1.0.2 `init-if-needed`, ephemeral-rollups-sdk 0.16.2 `["anchor","access-control"]`)
-- [ ] Add `#[ephemeral]` before `#[program]`
-- [ ] Define `Agent` account: `agent_id`, `authority`, `expected_measurement [u8;48]`, `quoting_key [u8;32]`, `model_id`, `price`, counters (`completed`, `verified`, `rejected`), `reputation`
-- [ ] Define `Job` account (per PRD §6): `job_id`, `creator`, `agent`, `prompt_ciphertext_commitment`, `status` enum (`Created|Escrowed|Executing|Verified|Rejected|Settled`), `budget`, `created_at`, `input_commitment`, `output_commitment`, `output_ciphertext_ref`, `attestation_status`, `expected_measurement`, `nonce`, `settlement_id` (idempotency key)
-- [ ] `register_agent` — provider registers with measurement + quoting key + price (allowlist entry)
-- [ ] `create_job` — init Job PDA, store commitments + nonce, set status `Created`; PDA seeds `["job", creator, job_id]`
-- [ ] Pre-fund Job PDA for `EphemeralPermission::size_of(MAX_MEMBERS)` rent during creation
-- [ ] `deposit_escrow` — move USDC from creator ATA into a program-owned escrow vault ATA (PDA authority), status → `Escrowed`
-- [ ] `errors.rs` — `Unauthorized`, `BadStatus`, `TooManyMembers`, `MeasurementMismatch`, `QuoteInvalid`, `InvalidDelegationRecord`, `AlreadySettled`
-- [ ] Enforce status transition guards on every instruction
-- [ ] Unit tests (LiteSVM/program-test): create_job, deposit_escrow, register_agent, bad-status rejections
+- [x] Anchor workspace + `Cargo.toml` deps (anchor-lang 1.0.2 `init-if-needed`, anchor-spl 1.0.2, ephemeral-rollups-sdk 0.16.2 `["anchor","access-control"]`)
+- [x] `#[ephemeral]` before `#[program]`
+- [x] Define `Agent` account: `authority`, `model_id`, `expected_measurement [u8;48]`, `quoting_key [u8;32]`, `price`, counters (`completed`/`verified`/`rejected`), `reputation` (bps) — `state.rs`
+- [x] Define `Job` account: `job_id`, `creator`, `agent`, `status` enum (`Created|Escrowed|Executing|Verified|Rejected|Settled`), `attestation_status`, `budget`, `created_at`, `prompt_ciphertext_commitment`, `input_commitment`, `output_commitment`, `expected_measurement`, `quoting_key`, `model_id`, `nonce`, `settlement_id` — `state.rs`
+- [x] `register_agent` — provider registers with measurement + quoting key + price (allowlist entry)
+- [x] `create_job` — init Job PDA, commitments + nonce, status `Created`; seeds `["job", creator, job_id_le]`
+- [x] Pre-fund Job PDA for `EphemeralPermission::size_of(MAX_PERMISSION_MEMBERS)` rent during creation
+- [x] `deposit_escrow` — USDC from creator ATA → program-owned escrow vault ATA (PDA `["escrow-auth", job]` authority), status → `Escrowed`
+- [x] `errors.rs` — full `VeilError` set (Unauthorized, BadStatus, TooManyMembers, MeasurementMismatch, QuoteInvalid, QuotingKeyMismatch, ReportDataMismatch, InvalidDelegationRecord, AlreadySettled, ModelIdTooLong, InvalidBudget)
+- [x] Status transition guards on every instruction
+- [x] Tests (ts-mocha vs local `solana-test-validator` — `scripts/test-local.sh`): **5 passing** — register_agent, create_job, deposit_escrow, bad-status + zero-budget rejections
+
+> **Note:** Anchor 1.x's `anchor test` uses **surfpool** (needs a Command Line Tools update we skipped). We run tests via `anchor/scripts/test-local.sh` (spins `solana-test-validator`, deploys, runs ts-mocha). Also fixed: Anchor 1.x `CpiContext::new(program_id: Pubkey, …)` (not AccountInfo), and `idl-build` must include `anchor-spl/idl-build`.
 
 ---
 
@@ -179,8 +181,8 @@ VeilAI/
 **Goal:** the polished lifecycle the judges see: Submit → Verifying → Verified → Paid.
 
 ### 6a. Setup
-- [ ] `create-next-app` (App Router, TS), Tailwind, Framer Motion, HugeIcons, privy but custom logins, email, google, x social icons input.
-- [ ] Design tokens (dark theme), layout shell, nav, toast system, liquid glass
+- [ ] `create-next-app` (App Router, TS), Tailwind, Framer Motion, HugeIcons,
+- [ ] Design tokens (dark theme), layout shell, nav, toast system, 
 - [ ] API client to backend; wallet context; devnet config
 
 ### 6b. Screens
