@@ -128,14 +128,16 @@ VeilAI/
 
 **Goal:** job state goes private inside the TEE-backed ER, gated to `[user, provider]`.
 
-- [ ] Import delegation/access-control SDK (`commit, delegate, ephemeral`; `Create/Update/CloseEphemeralPermissionCpi`; consts)
-- [ ] `delegate_job` (base) — `#[delegate]` context, `del` constraint on Job PDA, forward optional TEE `validator` in `DelegateConfig`
-- [ ] `init_permission` (ER) — idempotent `CreateEphemeralPermissionCpi`, members = `[creator, provider]`, `is_private = true`, cap at `MAX_PERMISSION_MEMBERS`
-- [ ] `set_permission` (ER) — `UpdateEphemeralPermissionCpi`, rebuild full member list (retain authority)
-- [ ] `close_permission` (ER) — `CloseEphemeralPermissionCpi` before undelegate
-- [ ] Shared `PermissionContext` (permission PDA under `PERMISSION_PROGRAM_ID`, vault, magic program) — replace `has_one` with app auth rule
-- [ ] `execute_marker` (ER) — provider marks status `Executing` (auth: provider must be permission member)
-- [ ] Integration test (local stack/devnet): init on base → delegate on base → verify router `getDelegationStatus` + owners → create permission on ER → confirm privacy boundary
+- [x] Import delegation/access-control SDK (`delegate, ephemeral`; `Create/Update/CloseEphemeralPermissionCpi`; consts)
+- [x] `delegate_job` (base) — `#[delegate]` context, `del` constraint on Job PDA, forward optional TEE `validator` in `DelegateConfig` — `delegate_job.rs`
+- [x] `init_permission` (ER) — idempotent `CreateEphemeralPermissionCpi`, members arg, `is_private = true`, cap at `MAX_PERMISSION_MEMBERS` — `permission.rs`
+- [x] `set_permission` (ER) — `UpdateEphemeralPermissionCpi`, rebuild full member list
+- [x] `close_permission` (ER) — `CloseEphemeralPermissionCpi` before undelegate
+- [x] Shared `PermissionContext` (permission PDA under `PERMISSION_PROGRAM_ID`, vault, magic program) — `has_one = creator` app auth rule
+- [x] `execute_marker` (ER) — provider marks status `Executing` (auth: `has_one = provider`, stored on Job)
+- [x] Added `provider` field to `Job` for ER-side auth without reading the (non-delegated) agent
+- [x] **Phase 2 builds green** (SDK PER APIs compile); Phase 1 tests still 5 passing
+- [ ] ⏳ Integration test (devnet): init on base → delegate on base → verify router `getDelegationStatus` + owners → create permission on ER → confirm privacy boundary — **blocked on devnet funding**
 
 ---
 
