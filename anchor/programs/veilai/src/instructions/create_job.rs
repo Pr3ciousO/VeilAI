@@ -35,6 +35,7 @@ pub fn handler(
     job.model_id = agent.model_id.clone();
     job.nonce = nonce;
     job.settlement_id = nonce; // unique per creator+job; guards double-settle
+    job.settled = false;
     job.bump = ctx.bumps.job;
 
     // Pre-fund the Job PDA for the EphemeralPermission rent it will pay when the

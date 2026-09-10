@@ -117,4 +117,16 @@ pub mod veilai {
             ed25519_ix_index,
         )
     }
+
+    // ─── Phase 4: Settlement ────────────────────────────────────────────
+
+    /// Release escrow to the provider for a Verified job (direct, Signer-authorized).
+    pub fn settle_payment_direct(ctx: Context<SettleDirect>) -> Result<()> {
+        instructions::settlement::settle_payment_direct(ctx)
+    }
+
+    /// Refund escrow to the creator for a Rejected job (direct, Signer-authorized).
+    pub fn refund_escrow_direct(ctx: Context<RefundDirect>) -> Result<()> {
+        instructions::settlement::refund_escrow_direct(ctx)
+    }
 }

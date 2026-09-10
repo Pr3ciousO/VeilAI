@@ -80,6 +80,8 @@ pub struct Job {
     pub nonce: [u8; 32],
     /// Idempotency key guarding settlement.
     pub settlement_id: [u8; 32],
+    /// True once escrow has been released or refunded (guards double-settle).
+    pub settled: bool,
     pub bump: u8,
 }
 
@@ -101,5 +103,6 @@ impl Job {
         + (4 + MAX_MODEL_ID_LEN)    // model_id
         + 32                        // nonce
         + 32                        // settlement_id
+        + 1                         // settled
         + 1; // bump
 }
