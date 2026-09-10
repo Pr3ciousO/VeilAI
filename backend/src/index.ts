@@ -11,7 +11,7 @@ app.use(cors());
 app.use(express.json({ limit: "2mb" }));
 
 app.get("/health", (_req, res) => {
-  res.json({ status: "ok", service: "veilai-backend", db: dbConfigured() });
+    res.json({ status: "ok", service: "veilai-backend", db: dbConfigured() });
 });
 
 app.use("/agents", agentsRouter);
@@ -19,14 +19,14 @@ app.use("/jobs", jobsRouter);
 
 // Central error handler.
 app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
-  if (err instanceof ZodError) {
-    return res.status(400).json({ error: "validation_error", issues: err.issues });
-  }
-  const message = err instanceof Error ? err.message : "internal_error";
-  console.error("[veilai] error:", message);
-  res.status(500).json({ error: message });
+    if (err instanceof ZodError) {
+        return res.status(400).json({ error: "validation_error", issues: err.issues });
+    }
+    const message = err instanceof Error ? err.message : "internal_error";
+    console.error("[veilai] error:", message);
+    res.status(500).json({ error: message });
 });
 
 app.listen(config.port, () => {
-  console.log(`[veilai] backend listening on :${config.port} (db=${dbConfigured()})`);
+    console.log(`[veilai] backend listening on :${config.port} (db=${dbConfigured()})`);
 });
