@@ -249,13 +249,15 @@ VeilAI/
 
 **Goal:** one reproducible run, start to finish, on devnet.
 
-- [ ] Wire frontend → backend → program → PER → settle, happy path green on devnet
-- [ ] E2E script: create → delegate → permission → escrow → execute → attest → verify → commit+settle
-- [ ] **INVALID path** E2E: tampered output → `Rejected` → escrow refunded (the demo money-shot)
-- [ ] Reputation updates reflected in agent profile from real runs
-- [ ] Latency budget: measure and tune to ≤60s creation→verified
-- [ ] Test gates per skill: program-logic test, delegation lifecycle test, ownership assertions, one retry/propagation test, Magic Action delivery test, payments test
-- [ ] Record a backup happy-path run (screen capture) for demo safety
+- [x] **Program deployed to devnet** — `86unmnYc6pGfmmCwFLBjbiVT9pd3vJA5CaAzyreYewPT` (deployer authority)
+- [x] **Devnet E2E** (`anchor/scripts/devnet-e2e.ts`, `pnpm --filter @veilai/anchor devnet:e2e`): register → create → escrow → execute → **verify_attestation (real Ed25519 precompile + measurement)** → settle — **green on real devnet**
+- [x] **INVALID path** E2E: tampered output → `Rejected` → escrow refunded — **green on real devnet** (the demo money-shot)
+- [x] Uses a self-created SPL mint as stand-in USDC (no canonical-USDC funding needed)
+- [ ] Live **PER delegation**: delegate Job PDA to a TEE validator, create `EphemeralPermission` on the real ER, run verify on the ER, `commit_and_settle` — *the privacy layer; final + riskiest integration (live MagicBlock devnet)*
+- [ ] Backend orchestrator submits the on-chain txns (currently runs the off-chain enclave loop); wire frontend → backend → program
+- [ ] Reputation reflected in agent profile from real runs; latency budget ≤60s; backup recording
+
+> **Phase 7 status:** the entire **proof-before-payment loop is proven on real Solana devnet** — verified→paid and tampered→rejected→refunded, driven by the on-chain `verify_attestation` (Ed25519 precompile + MRTD allowlist). What remains is the **PER privacy layer** (delegating job state into the TEE-backed ER so the prompt is never public base-layer state) and wiring the backend to submit these txns end to end.
 
 ---
 
