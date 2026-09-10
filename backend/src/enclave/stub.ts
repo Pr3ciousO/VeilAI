@@ -106,22 +106,8 @@ export class StubEnclave {
 
 /** Build the enclave from env (stub quoting key + measurement). */
 export function enclaveFromEnv(x25519Secret: Uint8Array): StubEnclave {
-  const quotingSecret = hexToBytes(
-    config.enclaveQuotingSecret || "00".repeat(32),
-  );
-  // Derive the pubkey from the ed25519 secret via the shared helper surface.
-  const { edPublicFromSecret } = requireEdHelpers();
+  const quotingSecret = hexToBytes(config.enclaveQuotingSecret || "00".repeat(32));
   const quotingKeyB58 = edPublicFromSecret(quotingSecret);
   const measurementHex = config.enclaveMeasurement || "ab".repeat(48);
   return new StubEnclave(x25519Secret, quotingSecret, quotingKeyB58, measurementHex);
-}
-
-// Small indirection to avoid a hard import cycle if shared changes.
-function requireEdHelpers(): { edPublicFromSecret: (secret: Uint8Array) => string } {
-  // ed25519 public from a 32-byte seed.
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { ed25519 } = require("@noble/curves/ed25519");
-  return {
-    edPublicFromSecret: (secret: Uint8Array) => bs58.encode(ed25519.getPublicKey(secret)),
-  };
 }
