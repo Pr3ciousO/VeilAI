@@ -16,7 +16,7 @@ veilai = "86unmnYc6pGfmmCwFLBjbiVT9pd3vJA5CaAzyreYewPT"
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "devnet"
+cluster = "localnet"
 wallet = "../wallets/deployer.keypair.json"
 
 [scripts]
