@@ -179,8 +179,8 @@ VeilAI/
 **Goal:** the polished lifecycle the judges see: Submit → Verifying → Verified → Paid.
 
 ### 6a. Setup
-- [ ] `create-next-app` (App Router, TS), Tailwind, Framer Motion, HugeIcons, wallet adapter (Phantom/Solflare)
-- [ ] Design tokens (dark theme), layout shell, nav, toast system
+- [ ] `create-next-app` (App Router, TS), Tailwind, Framer Motion, HugeIcons, privy but custom logins, email, google, x social icons input.
+- [ ] Design tokens (dark theme), layout shell, nav, toast system, liquid glass
 - [ ] API client to backend; wallet context; devnet config
 
 ### 6b. Screens
