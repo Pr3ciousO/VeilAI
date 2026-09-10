@@ -1,19 +1,32 @@
-import express from "express";
+import express, { type NextFunction, type Request, type Response } from "express";
 import cors from "cors";
+import { ZodError } from "zod";
 import { config } from "./config.js";
+import { dbConfigured } from "./db/client.js";
+import { agentsRouter } from "./routes/agents.js";
+import { jobsRouter } from "./routes/jobs.js";
 
 const app = express();
 app.use(cors());
-app.use(express.json({ limit: "1mb" }));
+app.use(express.json({ limit: "2mb" }));
 
 app.get("/health", (_req, res) => {
-  res.json({ status: "ok", service: "veilai-backend" });
+  res.json({ status: "ok", service: "veilai-backend", db: dbConfigured() });
 });
 
-// Route groups are mounted here as phases land:
-//   app.use("/agents", agentsRouter);
-//   app.use("/jobs", jobsRouter);
+app.use("/agents", agentsRouter);
+app.use("/jobs", jobsRouter);
+
+// Central error handler.
+app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+  if (err instanceof ZodError) {
+    return res.status(400).json({ error: "validation_error", issues: err.issues });
+  }
+  const message = err instanceof Error ? err.message : "internal_error";
+  console.error("[veilai] error:", message);
+  res.status(500).json({ error: message });
+});
 
 app.listen(config.port, () => {
-  console.log(`[veilai] backend listening on :${config.port}`);
+  console.log(`[veilai] backend listening on :${config.port} (db=${dbConfigured()})`);
 });

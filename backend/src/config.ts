@@ -17,4 +17,6 @@ export const config = {
   anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? "",
   enclaveQuotingSecret: process.env.ENCLAVE_QUOTING_SECRET ?? "",
   enclaveMeasurement: process.env.ENCLAVE_MEASUREMENT ?? "",
+  supabaseUrl: process.env.SUPABASE_URL ?? "",
+  supabaseServiceKey: process.env.SUPABASE_SERVICE_ROLE_KEY ?? "",
 };
