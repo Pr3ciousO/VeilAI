@@ -182,39 +182,32 @@ VeilAI/
 **Goal:** orchestrate the full lifecycle and run the provider/enclave; expose REST for the frontend.
 
 ### 5a. Shared + client plumbing
-- [ ] `shared/`: export IDL, program IDs, USDC mint, endpoints, quote codec, commitment helpers
-- [ ] Crypto helpers: x25519 (encrypt prompt to enclave), ed25519 (stub quoting key), sha256 commitments
-- [ ] Anchor client wrapper with **dual connections** (base + ER); router `getDelegationStatus` → `fqdn`
+- [x] `shared/`: config (program IDs, USDC mint, endpoints, seeds), types, commitment + crypto helpers
+- [x] Crypto helpers: x25519 seal/open (prompt↔enclave, output↔user), ed25519 sign/verify + `edPublicFromSecret`, sha256 commitments, `computeReportData`/`computeSignedMessage`
+- [ ] Anchor client wrapper with **dual connections** (base + ER); router `getDelegationStatus` → `fqdn` — *devnet integration (Phase 7)*
 
 ### 5b. Supabase persistence
-- [ ] Supabase project + service-role key (server-side only) in env
-- [ ] `@supabase/supabase-js` client wrapper (`backend/src/db/`)
-- [ ] Schema/migrations: `agents`, `jobs`, `job_events` (audit trail), `attestations`, `enclave_outputs` (ciphertext refs)
-- [ ] Chain is source of truth for money/status; Supabase mirrors + indexes for fast UI reads and off-chain data (ciphertext, output refs, metadata, capabilities)
-- [ ] Realtime: expose job status changes via Supabase Realtime (or backend SSE) to the frontend
+- [x] `@supabase/supabase-js` client wrapper (`backend/src/db/client.ts`), service-role, graceful `dbConfigured()`
+- [x] Schema (`backend/src/db/schema.sql`): `agents`, `jobs`, `job_events`, enums, indexes, `updated_at` trigger — holds off-chain ciphertext (sealed boxes) + metadata
+- [ ] Provision Supabase project + apply schema (needs your project keys)
+- [ ] Realtime job-status push to frontend (Supabase Realtime / SSE)
 
-### 5c. Orchestrator service
-- [ ] Job state machine mirroring on-chain status; persist transitions to `job_events`
-- [ ] Route delegation tx → base; ER ops → ER; use `GetCommitmentSignature` then confirm on base
-- [ ] Poll delegation status/ownership with bounded timeout before ER ops
-- [ ] Trigger `commit_and_settle` after verification; reconcile action delivery
+### 5c. Stub enclave (clearly labeled) ✅
+- [x] `backend/src/enclave/stub.ts` — decrypt prompt (x25519) → Claude inference (Anthropic SDK, `claude-opus-4-8`, offline fallback) → seal output to user
+- [x] Computes input/output commitments; emits ed25519 quote binding `sha256(report_data ‖ mrtd)` in TDX layout; "STUB ENCLAVE" labeled
 
-### 5d. Provider agent
-- [ ] Authenticate to Private ER (challenge → login → bearer token) to read private job
-- [ ] Pull job, hand ciphertext to enclave, submit resulting attestation via `verify_attestation`
+### 5d. REST API (for frontend) ✅ builds + boots
+- [x] `GET/POST /agents`, `GET /agents/:id` (Supabase-backed, zod-validated)
+- [x] `GET/POST /jobs`, `GET /jobs/:id`, `GET /jobs/enclave/pubkey`
+- [x] `POST /jobs/:id/execute` — drives the stub enclave, mirrors verify/reject + sealed output to DB, writes `job_events`
+- [x] `GET /jobs/:id/result`; central error handler (zod → 400); CORS
+- [ ] Rate limiting (deferred)
 
-### 5e. Stub enclave (clearly labeled)
-- [ ] Decrypt prompt (x25519) → call LLM (Claude via Anthropic API; key in env) → produce output
-- [ ] Encrypt output to user's key; compute input/output commitments
-- [ ] Emit ed25519-signed quote with fixed `mrtd` = registered measurement, in TDX field layout
-- [ ] Clear "STUB ENCLAVE" labeling in logs/responses
+### 5e. On-chain orchestrator (devnet — Phase 7)
+- [ ] Job state machine driving real delegation → PER permission → escrow → verify_attestation → commit_and_settle
+- [ ] Provider auth to Private ER (challenge → login → bearer token); dual-connection routing; `GetCommitmentSignature` + base confirm
 
-### 5f. REST API (for frontend)
-- [ ] `POST /agents` (register), `GET /agents`, `GET /agents/:id`
-- [ ] `POST /jobs` (create+delegate+permission+escrow orchestration), `GET /jobs`, `GET /jobs/:id`
-- [ ] `POST /jobs/:id/execute` (kick provider), status polling endpoint / SSE for live updates
-- [ ] `GET /jobs/:id/result` (returns decryptable output ref for creator)
-- [ ] Input validation (zod), error handling, CORS, rate limit
+> **Phase 5 status:** backend **builds green and boots** (`/health` ok). The demoable off-chain loop — create job → enclave decrypt/infer/attest → verify/reject → sealed result, all mirrored in Supabase — is complete. The on-chain submission wiring (5a client + 5e orchestrator) is deferred to devnet integration (Phase 7), which needs the funded wallet + live ER. Needs from you when ready: Supabase project keys + `ANTHROPIC_API_KEY`.
 
 ---
 
