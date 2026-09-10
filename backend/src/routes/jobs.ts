@@ -128,6 +128,9 @@ jobsRouter.post("/:id/execute", async (req, res, next) => {
       .update({
         output_commitment: out.outputCommitment,
         output_ciphertext: out.outputBox,
+        // Recorded so a viewer can tell "sealed to a key I don't hold" apart
+        // from "decryption failed" without attempting a doomed decrypt.
+        output_recipient_pubkey: userPublicKeyB58,
         attestation_status: verified ? AttestationStatus.Verified : AttestationStatus.Rejected,
         status: verified ? JobStatus.Verified : JobStatus.Rejected,
       })
@@ -144,7 +147,7 @@ jobsRouter.get("/:id/result", async (req, res, next) => {
   try {
     const { data, error } = await db()
       .from("jobs")
-      .select("id, status, output_commitment, output_ciphertext")
+      .select("id, status, output_commitment, output_ciphertext, output_recipient_pubkey")
       .eq("id", req.params.id)
       .single();
     if (error) throw error;

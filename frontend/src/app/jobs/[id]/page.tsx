@@ -16,6 +16,7 @@ export default function JobDetail({ params }: PageProps<"/jobs/[id]">) {
   const [err, setErr] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<string | null>(null);
+  const [revealErr, setRevealErr] = useState<string | null>(null);
 
   async function refresh() {
     const r = await api.job(id);
@@ -41,8 +42,31 @@ export default function JobDetail({ params }: PageProps<"/jobs/[id]">) {
   }
 
   async function reveal() {
-    const r = await api.result(id);
-    if (r.result.output_ciphertext) setResult(await openResult(r.result.output_ciphertext));
+    setRevealErr(null);
+    try {
+      const r = await api.result(id);
+      const box = r.result.output_ciphertext;
+      if (!box) {
+        setRevealErr("No sealed output recorded for this job yet.");
+        return;
+      }
+      // The output is sealed to the x25519 key of the browser that ran the
+      // enclave — not to the wallet. Another browser (or this one after
+      // localStorage was cleared) simply cannot open it.
+      const { publicB58 } = getUserKey();
+      const sealedTo = r.result.output_recipient_pubkey;
+      if (sealedTo && sealedTo !== publicB58) {
+        setRevealErr(
+          "This result is sealed to the key of the browser that ran the job. Only that browser can decrypt it.",
+        );
+        return;
+      }
+      setResult(await openResult(box));
+    } catch {
+      setRevealErr(
+        "Could not decrypt this result — it was sealed to a different key than the one in this browser.",
+      );
+    }
   }
 
   if (!job) {

@@ -91,6 +91,8 @@ export const api = {
         status: string;
         output_commitment: string | null;
         output_ciphertext: SealedBoxDTO | null;
+        /** x25519 pubkey the output was sealed to; null for pre-migration rows. */
+        output_recipient_pubkey: string | null;
       };
     }>(`/jobs/${id}/result`),
 };

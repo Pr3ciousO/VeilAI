@@ -53,6 +53,7 @@ create table if not exists jobs (
   -- Off-chain confidential material (encrypted; never plaintext):
   prompt_ciphertext           jsonb,                -- SealedBox to enclave
   output_ciphertext           jsonb,                -- SealedBox to creator
+  output_recipient_pubkey     text,                 -- x25519 pubkey the output was sealed to
   settlement_tx               text,                 -- solana signature
   created_at                  timestamptz not null default now(),
   updated_at                  timestamptz not null default now()
@@ -67,6 +68,10 @@ create table if not exists job_events (
   signature   text,                     -- related solana signature, if any
   created_at  timestamptz not null default now()
 );
+
+-- Additive migrations for databases created before the column existed
+-- (`create table if not exists` above is a no-op once the table is there).
+alter table jobs add column if not exists output_recipient_pubkey text;
 
 create index if not exists jobs_creator_idx on jobs(creator);
 create index if not exists jobs_agent_idx on jobs(agent_id);
