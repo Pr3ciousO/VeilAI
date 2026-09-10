@@ -1,0 +1,16 @@
+packages:
+  - "shared"
+  - "backend"
+  - "frontend"
+  - "anchor"
+allowBuilds:
+  "@stellar/stellar-sdk": false
+  bigint-buffer: true
+  blake-hash: true
+  bufferutil: true
+  esbuild: true
+  protobufjs: true
+  tiny-secp256k1: true
+  unrs-resolver: true
+  usb: false
+  utf-8-validate: true

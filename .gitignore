@@ -1,0 +1,43 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Builds
+dist/
+build/
+.next/
+out/
+target/
+
+# Anchor
+anchor/.anchor/
+anchor/test-ledger/
+**/*.rs.bk
+
+# Env & secrets
+.env
+.env.local
+.env.*.local
+*.keypair.json
+!*.example
+wallets/
+keypairs/
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.idea/
+*.swp
+.vscode/*
+!.vscode/extensions.json
+
+# Misc
+coverage/
+.turbo/

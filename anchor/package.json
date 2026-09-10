@@ -1,0 +1,23 @@
+{
+  "name": "@veilai/anchor",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "test": "anchor test",
+    "test:skip-build": "anchor test --skip-build"
+  },
+  "dependencies": {
+    "@coral-xyz/anchor": "0.32.1"
+  },
+  "devDependencies": {
+    "@solana/spl-token": "^0.4.9",
+    "@solana/web3.js": "^1.98.0",
+    "@types/chai": "^5.0.1",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^24.0.0",
+    "chai": "^5.1.2",
+    "mocha": "^11.0.1",
+    "ts-mocha": "^11.1.0",
+    "typescript": "^5.7.2"
+  }
+}
