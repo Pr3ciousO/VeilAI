@@ -1,5 +1,5 @@
 import { AttestationQuote } from "./types.js";
-import { computeReportData, hexToBytes, bytesToHex } from "./commitment.js";
+import { computeReportData, computeSignedMessage, hexToBytes, bytesToHex } from "./commitment.js";
 import { edSign, edVerify } from "./crypto.js";
 import bs58 from "bs58";
 
@@ -27,7 +27,9 @@ export function buildQuote(params: {
     modelId: params.modelId,
     nonce: params.nonce,
   });
-  const signature = edSign(params.quotingSecret, hexToBytes(reportData));
+  // The enclave signs sha256(report_data ‖ mrtd) so the measurement is bound.
+  const signedMessage = computeSignedMessage(reportData, params.mrtd);
+  const signature = edSign(params.quotingSecret, hexToBytes(signedMessage));
   return {
     reportData,
     mrtd: params.mrtd,
@@ -35,6 +37,11 @@ export function buildQuote(params: {
     signature: bytesToHex(signature),
     quotingKey: params.quotingKeyB58,
   };
+}
+
+/** The 32-byte message the ed25519 signature covers, hex. */
+export function quoteSignedMessage(quote: AttestationQuote): string {
+  return computeSignedMessage(quote.reportData, quote.mrtd);
 }
 
 /**
@@ -63,7 +70,8 @@ export function verifyQuote(
     return { ok: false, reason: "quoting key not allowlisted" };
   if (quote.mrtd.toLowerCase() !== expected.expectedMeasurement.toLowerCase())
     return { ok: false, reason: "measurement not allowlisted" };
-  const sigOk = edVerify(quote.quotingKey, hexToBytes(quote.signature), hexToBytes(quote.reportData));
+  const signedMessage = computeSignedMessage(quote.reportData, quote.mrtd);
+  const sigOk = edVerify(quote.quotingKey, hexToBytes(quote.signature), hexToBytes(signedMessage));
   if (!sigOk) return { ok: false, reason: "invalid signature" };
   return { ok: true };
 }

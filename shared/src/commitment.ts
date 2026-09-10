@@ -31,6 +31,17 @@ export function computeReportData(params: {
   return bytesToHex(sha256(parts));
 }
 
+/**
+ * signed_message = sha256(report_data ‖ mrtd).
+ * This is what the enclave quoting key actually signs, so the measurement is
+ * cryptographically bound to the signature (not just an unsigned claim).
+ * The on-chain verifier recomputes and checks this exact message.
+ */
+export function computeSignedMessage(reportDataHex: string, mrtdHex: string): string {
+  const parts = concatBytes(hexToBytes(reportDataHex), hexToBytes(mrtdHex));
+  return bytesToHex(sha256(parts));
+}
+
 export function hexToBytes(hex: string): Uint8Array {
   const clean = hex.startsWith("0x") ? hex.slice(2) : hex;
   if (clean.length % 2 !== 0) throw new Error("invalid hex length");
