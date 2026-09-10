@@ -143,6 +143,9 @@ importers:
       ts-mocha:
         specifier: ^11.1.0
         version: 11.1.0(mocha@11.8.0)(ts-node@10.9.2(@types/node@24.13.3)(typescript@5.9.3))
+      tweetnacl:
+        specifier: ^1.0.3
+        version: 1.0.3
       typescript:
         specifier: ^5.7.2
         version: 5.9.3

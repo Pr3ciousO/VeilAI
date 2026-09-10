@@ -8,7 +8,7 @@ import {
   getAccount,
   getAssociatedTokenAddressSync,
 } from "@solana/spl-token";
-import { PublicKey, Keypair, SystemProgram } from "@solana/web3.js";
+import { PublicKey, Keypair } from "@solana/web3.js";
 import { assert } from "chai";
 import * as crypto from "crypto";
 
@@ -20,8 +20,9 @@ describe("veilai — phase 1 (job lifecycle)", () => {
   const wallet = provider.wallet as anchor.Wallet;
   const connection = provider.connection;
 
-  // The same wallet acts as both provider (agent authority) and job creator here.
-  const authority = wallet.payer;
+  const creator = wallet.payer;
+  // Dedicated provider (agent authority) keypair — isolates this file's agent PDA.
+  const providerKp = Keypair.generate();
 
   const AGENT_SEED = Buffer.from("agent");
   const JOB_SEED = Buffer.from("job");
@@ -33,50 +34,46 @@ describe("veilai — phase 1 (job lifecycle)", () => {
   const modelId = "claude-haiku-4-5";
   const measurement = Array.from(crypto.randomBytes(48));
   const quotingKey = Array.from(crypto.randomBytes(32));
-  const price = new anchor.BN(30_000); // 0.03 USDC (6 decimals)
+  const price = new anchor.BN(30_000);
 
   const jobId = new anchor.BN(Math.floor(Math.random() * 1_000_000));
-  const budget = new anchor.BN(50_000); // 0.05 USDC
+  const budget = new anchor.BN(50_000);
   const promptCommitment = Array.from(crypto.randomBytes(32));
   const inputCommitment = Array.from(crypto.randomBytes(32));
   const nonce = Array.from(crypto.randomBytes(32));
 
   const agentPda = PublicKey.findProgramAddressSync(
-    [AGENT_SEED, authority.publicKey.toBuffer()],
+    [AGENT_SEED, providerKp.publicKey.toBuffer()],
     program.programId,
   )[0];
-
   const jobPda = PublicKey.findProgramAddressSync(
-    [JOB_SEED, authority.publicKey.toBuffer(), jobId.toArrayLike(Buffer, "le", 8)],
+    [JOB_SEED, creator.publicKey.toBuffer(), jobId.toArrayLike(Buffer, "le", 8)],
     program.programId,
   )[0];
-
   const escrowAuthority = PublicKey.findProgramAddressSync(
     [ESCROW_AUTH_SEED, jobPda.toBuffer()],
     program.programId,
   )[0];
 
   before(async () => {
-    // Local USDC-like mint (6 decimals) and a funded creator ATA.
-    usdcMint = await createMint(connection, authority, authority.publicKey, null, 6);
-    const ata = await getOrCreateAssociatedTokenAccount(
-      connection,
-      authority,
-      usdcMint,
-      authority.publicKey,
-    );
+    const air = await connection.requestAirdrop(providerKp.publicKey, 2_000_000_000);
+    await connection.confirmTransaction(air, "confirmed");
+
+    usdcMint = await createMint(connection, creator, creator.publicKey, null, 6);
+    const ata = await getOrCreateAssociatedTokenAccount(connection, creator, usdcMint, creator.publicKey);
     creatorAta = ata.address;
-    await mintTo(connection, authority, usdcMint, creatorAta, authority, 1_000_000);
+    await mintTo(connection, creator, usdcMint, creatorAta, creator, 1_000_000);
   });
 
   it("registers an agent", async () => {
     await program.methods
       .registerAgent(modelId, measurement, quotingKey, price)
-      .accounts({ authority: authority.publicKey })
+      .accounts({ authority: providerKp.publicKey })
+      .signers([providerKp])
       .rpc();
 
     const agent = await program.account.agent.fetch(agentPda);
-    assert.equal(agent.authority.toBase58(), authority.publicKey.toBase58());
+    assert.equal(agent.authority.toBase58(), providerKp.publicKey.toBase58());
     assert.equal(agent.modelId, modelId);
     assert.deepEqual(agent.expectedMeasurement, measurement);
     assert.deepEqual(agent.quotingKey, quotingKey);
@@ -86,17 +83,14 @@ describe("veilai — phase 1 (job lifecycle)", () => {
   it("creates a private job", async () => {
     await program.methods
       .createJob(jobId, promptCommitment, inputCommitment, nonce, budget)
-      .accounts({
-        job: jobPda,
-        agent: agentPda,
-        creator: authority.publicKey,
-      })
+      .accounts({ job: jobPda, agent: agentPda, creator: creator.publicKey })
       .rpc();
 
     const job = await program.account.job.fetch(jobPda);
     assert.equal(job.jobId.toString(), jobId.toString());
-    assert.equal(job.creator.toBase58(), authority.publicKey.toBase58());
+    assert.equal(job.creator.toBase58(), creator.publicKey.toBase58());
     assert.equal(job.agent.toBase58(), agentPda.toBase58());
+    assert.equal(job.provider.toBase58(), providerKp.publicKey.toBase58());
     assert.deepEqual(job.status, { created: {} });
     assert.deepEqual(job.attestationStatus, { none: {} });
     assert.deepEqual(job.expectedMeasurement, measurement);
@@ -107,13 +101,7 @@ describe("veilai — phase 1 (job lifecycle)", () => {
   it("deposits escrow and flips status to Escrowed", async () => {
     await program.methods
       .depositEscrow()
-      .accounts({
-        job: jobPda,
-        creator: authority.publicKey,
-        usdcMint,
-        creatorAta,
-        escrowAuthority,
-      })
+      .accounts({ job: jobPda, creator: creator.publicKey, usdcMint, creatorAta, escrowAuthority })
       .rpc();
 
     const job = await program.account.job.fetch(jobPda);
@@ -128,13 +116,7 @@ describe("veilai — phase 1 (job lifecycle)", () => {
     try {
       await program.methods
         .depositEscrow()
-        .accounts({
-          job: jobPda,
-          creator: authority.publicKey,
-          usdcMint,
-          creatorAta,
-          escrowAuthority,
-        })
+        .accounts({ job: jobPda, creator: creator.publicKey, usdcMint, creatorAta, escrowAuthority })
         .rpc();
       assert.fail("expected BadStatus error");
     } catch (err: any) {
@@ -145,17 +127,13 @@ describe("veilai — phase 1 (job lifecycle)", () => {
   it("rejects a job with zero budget (InvalidBudget)", async () => {
     const badJobId = new anchor.BN(Math.floor(Math.random() * 1_000_000) + 1_000_000);
     const badJobPda = PublicKey.findProgramAddressSync(
-      [JOB_SEED, authority.publicKey.toBuffer(), badJobId.toArrayLike(Buffer, "le", 8)],
+      [JOB_SEED, creator.publicKey.toBuffer(), badJobId.toArrayLike(Buffer, "le", 8)],
       program.programId,
     )[0];
     try {
       await program.methods
         .createJob(badJobId, promptCommitment, inputCommitment, nonce, new anchor.BN(0))
-        .accounts({
-          job: badJobPda,
-          agent: agentPda,
-          creator: authority.publicKey,
-        })
+        .accounts({ job: badJobPda, agent: agentPda, creator: creator.publicKey })
         .rpc();
       assert.fail("expected InvalidBudget error");
     } catch (err: any) {
