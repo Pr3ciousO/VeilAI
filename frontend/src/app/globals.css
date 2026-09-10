@@ -1,26 +1,90 @@
 @import "tailwindcss";
 
+/* ─── VeilAI design tokens ─────────────────────────────────────────────
+   Dark-only. Elevation climbs onyx → carbon → graphite → smoke → iron.
+   Text hierarchy snow → mist → fog → steel → pewter. Borders ash/ferrite. */
+@theme {
+  --color-void: #030404;
+  --color-onyx: #08090a;
+  --color-carbon: #141516;
+  --color-graphite: #1c1c1f;
+  --color-smoke: #23252a;
+  --color-iron: #2d2e31;
+  --color-ash: #34343a;
+  --color-ferrite: #3e3e44;
+  --color-steel: #62666d;
+  --color-pewter: #7f7f80;
+  --color-fog: #8a8f98;
+  --color-mist: #d0d6e0;
+  --color-chalk: #e4e5e9;
+  --color-snow: #f7f8f8;
+
+  /* Accent — a cool signal tone for verified/active states. */
+  --color-verify: #4ade80;
+  --color-reject: #f87171;
+  --color-pending: #fbbf24;
+
+  --font-sans: var(--font-space-grotesk), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-space-grotesk), ui-monospace, monospace;
+
+  --radius-pill: 9999px;
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: dark;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  height: 100%;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  min-height: 100%;
+  background:
+    radial-gradient(1200px 800px at 50% -20%, #101215 0%, transparent 60%),
+    var(--color-onyx);
+  color: var(--color-mist);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ─── Liquid glass ─────────────────────────────────────────────────────
+   Translucent surface + backdrop blur + hairline border + void shadow. */
+@utility glass {
+  background: color-mix(in srgb, var(--color-carbon) 72%, transparent);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  border: 1px solid color-mix(in srgb, var(--color-ash) 80%, transparent);
+  box-shadow:
+    0 1px 0 0 color-mix(in srgb, var(--color-snow) 4%, transparent) inset,
+    0 20px 50px -20px var(--color-void);
+}
+
+@utility glass-raised {
+  background: color-mix(in srgb, var(--color-graphite) 78%, transparent);
+  backdrop-filter: blur(24px) saturate(150%);
+  -webkit-backdrop-filter: blur(24px) saturate(150%);
+  border: 1px solid color-mix(in srgb, var(--color-ferrite) 85%, transparent);
+  box-shadow:
+    0 1px 0 0 color-mix(in srgb, var(--color-snow) 5%, transparent) inset,
+    0 30px 60px -25px var(--color-void);
+}
+
+/* Thin scrollbars that match the palette. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-ash) transparent;
+}
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-ash);
+  border-radius: 9999px;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--color-verify) 30%, transparent);
+  color: var(--color-snow);
 }
