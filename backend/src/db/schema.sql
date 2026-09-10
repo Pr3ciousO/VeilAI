@@ -23,10 +23,14 @@ create table if not exists agents (
 );
 
 -- ─── Jobs (mirror of on-chain Job + off-chain refs) ─────────────────────
-create type job_status as enum
-  ('Created', 'Escrowed', 'Executing', 'Verified', 'Rejected', 'Settled');
-create type attestation_status as enum
-  ('None', 'Submitted', 'Verified', 'Rejected');
+do $$ begin
+  create type job_status as enum
+    ('Created', 'Escrowed', 'Executing', 'Verified', 'Rejected', 'Settled');
+exception when duplicate_object then null; end $$;
+do $$ begin
+  create type attestation_status as enum
+    ('None', 'Submitted', 'Verified', 'Rejected');
+exception when duplicate_object then null; end $$;
 
 create table if not exists jobs (
   id                          text primary key,     -- job PDA (base58)

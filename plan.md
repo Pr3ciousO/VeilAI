@@ -253,11 +253,11 @@ VeilAI/
 - [x] **Devnet E2E** (`anchor/scripts/devnet-e2e.ts`, `pnpm --filter @veilai/anchor devnet:e2e`): register → create → escrow → execute → **verify_attestation (real Ed25519 precompile + measurement)** → settle — **green on real devnet**
 - [x] **INVALID path** E2E: tampered output → `Rejected` → escrow refunded — **green on real devnet** (the demo money-shot)
 - [x] Uses a self-created SPL mint as stand-in USDC (no canonical-USDC funding needed)
-- [ ] Live **PER delegation**: delegate Job PDA to a TEE validator, create `EphemeralPermission` on the real ER, run verify on the ER, `commit_and_settle` — *the privacy layer; final + riskiest integration (live MagicBlock devnet)*
-- [ ] Backend orchestrator submits the on-chain txns (currently runs the off-chain enclave loop); wire frontend → backend → program
-- [ ] Reputation reflected in agent profile from real runs; latency budget ≤60s; backup recording
+- [x] **Live PER delegation** (`anchor/scripts/devnet-per.ts`) — **green on real MagicBlock devnet TEE**: create_job → `delegate_job` to the TEE validator (`MTEWGuqxUpYZGFJQcp8tLN7x5v9BSeoFHYWQQ3n3xzo`, ER `devnet-tee-as.magicblock.app`) → delegation propagated (base owner = delegation program, ER clone owned by veilai) → **`verifyTeeRpcIntegrity`** (genuine TDX quote) → challenge/login auth → **`init_permission` on the ER** (EphemeralPermission live, gated to [creator, provider])
+- [ ] Backend orchestrator submits the on-chain txns (currently runs the off-chain enclave loop); wire frontend → backend → program — *carried into Phase 8*
+- [ ] Reputation reflected in agent profile from real runs; latency budget ≤60s; backup recording — *Phase 8*
 
-> **Phase 7 status:** the entire **proof-before-payment loop is proven on real Solana devnet** — verified→paid and tampered→rejected→refunded, driven by the on-chain `verify_attestation` (Ed25519 precompile + MRTD allowlist). What remains is the **PER privacy layer** (delegating job state into the TEE-backed ER so the prompt is never public base-layer state) and wiring the backend to submit these txns end to end.
+> **Phase 7 status: ✅ core complete on real devnet.** Both halves proven live: (1) the **proof-before-payment loop** (verified→paid, tampered→rejected→refunded via on-chain `verify_attestation` = Ed25519 precompile + MRTD allowlist), and (2) the **PER privacy layer** (delegation into the TEE-backed ER + TDX integrity check + EphemeralPermission). The prompt commitments live in private, permission-gated ER state, not public base state. Remaining: end-to-end backend orchestration wiring + demo polish (Phase 8).
 
 ---
 

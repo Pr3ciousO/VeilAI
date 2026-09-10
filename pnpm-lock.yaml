@@ -118,6 +118,9 @@ importers:
       '@coral-xyz/anchor':
         specifier: 0.32.1
         version: 0.32.1(bufferutil@4.1.0)(encoding@0.1.13)(typescript@5.9.3)(utf-8-validate@6.0.6)
+      '@magicblock-labs/ephemeral-rollups-sdk':
+        specifier: 0.15.5
+        version: 0.15.5
     devDependencies:
       '@solana/spl-token':
         specifier: ^0.4.9

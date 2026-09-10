@@ -15,13 +15,16 @@ import {
   delegationRecordPdaFromDelegatedAccount,
   delegationMetadataPdaFromDelegatedAccount,
   getDelegationRecord,
+  getAuthToken,
+  verifyTeeRpcIntegrity,
+  permissionPdaFromAccount,
   PERMISSION_PROGRAM_ID,
-  PERMISSION_SEED,
   EPHEMERAL_VAULT_ID,
   MAGIC_PROGRAM_ID,
 } from "@magicblock-labs/ephemeral-rollups-sdk";
 import * as fs from "fs";
 import * as crypto from "crypto";
+import nacl from "tweetnacl";
 
 const BASE_RPC = process.env.DEVNET_RPC ?? "https://api.devnet.solana.com";
 const TEE_ER = process.env.TEE_ER ?? "https://devnet-tee-as.magicblock.app";
@@ -96,11 +99,21 @@ async function main() {
   const rec = await getDelegationRecord(base, jobPda).catch(() => null);
   ok(`delegated — base owner = delegation program, ER clone owned by veilai${rec ? ` (validator ${rec.authority?.toBase58?.() ?? "?"})` : ""}`);
 
-  // 4. init_permission on the ER → make the Job state PRIVATE, gated to [creator, provider].
-  const permission = PublicKey.findProgramAddressSync(
-    [Buffer.from(PERMISSION_SEED), jobPda.toBuffer()],
-    PERMISSION_PROGRAM_ID,
-  )[0];
+  // 4. Verify the TEE RPC integrity (genuine TDX quote bound to a fresh challenge).
+  log("verifyTeeRpcIntegrity…");
+  await verifyTeeRpcIntegrity(TEE_ER);
+  ok("TEE RPC integrity verified (genuine TDX quote)");
+
+  // 5. Authenticate to the private ER (signed challenge → token).
+  log("authenticating to the TEE ER (challenge → login)…");
+  const { token } = await getAuthToken(TEE_ER, deployer.publicKey, async (msg) =>
+    nacl.sign.detached(msg, deployer.secretKey),
+  );
+  const erAuthed = new Connection(`${TEE_ER}?token=${token}`, "confirmed");
+  ok("authorized — bearer token obtained");
+
+  // 6. init_permission on the ER → make the Job state PRIVATE, gated to [creator, provider].
+  const permission = permissionPdaFromAccount(jobPda);
   const FULL = 1 | 2 | 4 | 8 | 16; // authority + all visibility flags
   const members = [
     { flags: FULL, pubkey: deployer.publicKey },
@@ -121,13 +134,13 @@ async function main() {
 
   const tx = new Transaction().add(ix);
   tx.feePayer = deployer.publicKey;
-  tx.recentBlockhash = (await er.getLatestBlockhash()).blockhash;
+  tx.recentBlockhash = (await erAuthed.getLatestBlockhash()).blockhash;
   tx.sign(deployer);
-  const sig = await er.sendRawTransaction(tx.serialize(), { skipPreflight: true });
-  await er.confirmTransaction(sig, "confirmed");
+  const sig = await erAuthed.sendRawTransaction(tx.serialize(), { skipPreflight: true });
+  await erAuthed.confirmTransaction(sig, "confirmed");
   ok(`permission created on the ER — sig ${sig.slice(0, 16)}…`);
 
-  const permInfo = await er.getAccountInfo(permission);
+  const permInfo = await erAuthed.getAccountInfo(permission);
   ok(`permission account live on ER (${permInfo?.data.length ?? 0} bytes, owner ${permInfo?.owner.toBase58().slice(0, 8)}…)`);
 
   console.log("\n\x1b[32m\x1b[1mLIVE PER DELEGATION COMPLETE\x1b[0m — Job state is delegated into the TEE-backed ER and gated by an EphemeralPermission. The prompt commitments now live in private ER state, not public base-layer state.");
