@@ -12,8 +12,10 @@
 | Layer | Tech |
 | --- | --- |
 | Program | Rust + Anchor 1.0.2, `ephemeral-rollups-sdk` 0.16.2 (`anchor` + `access-control`) |
-| Backend | Node.js + Express + TypeScript |
+| Backend | Node.js + Express + TypeScript + **Supabase** (Postgres) for job/agent persistence |
 | Frontend | Next.js (latest, App Router) + Tailwind + Framer Motion + HugeIcons |
+| Auth/Wallet | **Privy** — custom login UI (email, Google, X), **not** the default modal |
+| Design | **Space Grotesk**, liquid-glass surfaces, rounded-full pills, motion throughout; dark palette (below) |
 | Shared | TypeScript package (types, commitment/crypto helpers, IDL) |
 | Chain | Solana devnet + MagicBlock PER (devnet) |
 | Payments | Program-owned USDC escrow vault (core) + MagicBlock Private Payments API (privacy, P1) |
@@ -26,6 +28,33 @@
 
 ---
 
+## Design system (frontend)
+
+**Font:** Space Grotesk (all weights). **Language:** liquid glass (translucent, blurred surfaces with hairline borders + inner glow), **rounded-full pills** for buttons/badges/inputs, motion on every state change (Framer Motion — enter/exit, hover, status transitions).
+
+**Color tokens** (define as CSS variables + Tailwind theme in `frontend/`):
+
+| Token | Hex | Use |
+| --- | --- | --- |
+| `void` | `#030404` | Deepest recess, box-shadow tint, absolute dark accent |
+| `onyx` | `#08090a` | Page background, primary surface |
+| `carbon` | `#141516` | Elevated card, input field, subtle surface layer |
+| `graphite` | `#1c1c1f` | Mid-elevation panels, nested surfaces |
+| `smoke` | `#23252a` | Hover state, deeper card, button surface tone |
+| `iron` | `#2d2e31` | Pressed/active surface, highest tier elevation |
+| `ash` | `#34343a` | Primary hairline border — dividers, rows, separators |
+| `ferrite` | `#3e3e44` | Inner shadow stroke, focus-adjacent borders, 1px outlines |
+| `steel` | `#62666d` | Tertiary text, muted icon, low-emphasis helper |
+| `pewter` | `#7f7f80` | Disabled text, placeholder-tier secondary |
+| `fog` | `#8a8f98` | Muted body, metadata, timestamps, nav sub-items |
+| `mist` | `#d0d6e0` | Secondary text, descriptions, list body |
+| `chalk` | `#e4e5e9` | Light icon accent, rare light dividers |
+| `snow` | `#f7f8f8` | Primary text, headings, logo, pill border — the only near-white |
+
+Rules: dark-first (no light theme). Elevation climbs onyx → carbon → graphite → smoke → iron. Borders use ash/ferrite only. Text hierarchy snow → mist → fog → steel → pewter. Glass surfaces = translucent carbon/graphite + backdrop-blur + ash hairline + subtle void shadow.
+
+---
+
 ## Repo layout (target)
 
 ```
@@ -35,12 +64,17 @@ VeilAI/
 │   ├── tests/               # ts-mocha integration tests
 │   └── Anchor.toml
 ├── backend/                # Express + TS
+│   ├── src/db/              # Supabase client + schema/migrations
 │   ├── src/orchestrator/    # job lifecycle driver (delegation, PER, commit, settle)
 │   ├── src/provider/        # the AI agent (calls model, requests attestation)
 │   ├── src/enclave/         # stub TEE: decrypt → run model → emit ed25519 quote
 │   ├── src/attestation/     # quote build/parse helpers (shared format)
 │   └── src/routes/          # REST API for the frontend
 ├── frontend/               # Next.js app
+│   ├── app/                 # App Router pages
+│   ├── components/ui/       # GlassCard, PillButton, PillInput, StatusChip … (liquid glass)
+│   ├── components/auth/     # Privy custom login (email + Google + X)
+│   └── lib/                 # api client, privy config, palette tokens
 ├── shared/                 # TS: types, commitment + crypto (x25519/ed25519), IDL, program IDs
 └── plan.md / prd.md
 ```
@@ -151,23 +185,30 @@ VeilAI/
 - [ ] Crypto helpers: x25519 (encrypt prompt to enclave), ed25519 (stub quoting key), sha256 commitments
 - [ ] Anchor client wrapper with **dual connections** (base + ER); router `getDelegationStatus` → `fqdn`
 
-### 5b. Orchestrator service
-- [ ] Job state machine mirroring on-chain status; persistence (SQLite/Postgres or in-memory for demo)
+### 5b. Supabase persistence
+- [ ] Supabase project + service-role key (server-side only) in env
+- [ ] `@supabase/supabase-js` client wrapper (`backend/src/db/`)
+- [ ] Schema/migrations: `agents`, `jobs`, `job_events` (audit trail), `attestations`, `enclave_outputs` (ciphertext refs)
+- [ ] Chain is source of truth for money/status; Supabase mirrors + indexes for fast UI reads and off-chain data (ciphertext, output refs, metadata, capabilities)
+- [ ] Realtime: expose job status changes via Supabase Realtime (or backend SSE) to the frontend
+
+### 5c. Orchestrator service
+- [ ] Job state machine mirroring on-chain status; persist transitions to `job_events`
 - [ ] Route delegation tx → base; ER ops → ER; use `GetCommitmentSignature` then confirm on base
 - [ ] Poll delegation status/ownership with bounded timeout before ER ops
 - [ ] Trigger `commit_and_settle` after verification; reconcile action delivery
 
-### 5c. Provider agent
+### 5d. Provider agent
 - [ ] Authenticate to Private ER (challenge → login → bearer token) to read private job
 - [ ] Pull job, hand ciphertext to enclave, submit resulting attestation via `verify_attestation`
 
-### 5d. Stub enclave (clearly labeled)
+### 5e. Stub enclave (clearly labeled)
 - [ ] Decrypt prompt (x25519) → call LLM (Claude via Anthropic API; key in env) → produce output
 - [ ] Encrypt output to user's key; compute input/output commitments
 - [ ] Emit ed25519-signed quote with fixed `mrtd` = registered measurement, in TDX field layout
 - [ ] Clear "STUB ENCLAVE" labeling in logs/responses
 
-### 5e. REST API (for frontend)
+### 5f. REST API (for frontend)
 - [ ] `POST /agents` (register), `GET /agents`, `GET /agents/:id`
 - [ ] `POST /jobs` (create+delegate+permission+escrow orchestration), `GET /jobs`, `GET /jobs/:id`
 - [ ] `POST /jobs/:id/execute` (kick provider), status polling endpoint / SSE for live updates
@@ -178,25 +219,34 @@ VeilAI/
 
 # Phase 6 — Frontend (Next.js + Tailwind + Framer + HugeIcons) 🔴
 
-**Goal:** the polished lifecycle the judges see: Submit → Verifying → Verified → Paid.
+**Goal:** the polished lifecycle the judges see: Submit → Verifying → Verified → Paid — in a liquid-glass, Space Grotesk UI.
 
-### 6a. Setup
-- [ ] `create-next-app` (App Router, TS), Tailwind, Framer Motion, HugeIcons,
-- [ ] Design tokens (dark theme), layout shell, nav, toast system, 
-- [ ] API client to backend; wallet context; devnet config
+### 6a. Setup & design system
+- [x] `create-next-app` (App Router, TS, Tailwind) — scaffolded in Phase 0 (Framer Motion, HugeIcons, wallet-adapter installed)
+- [ ] Load **Space Grotesk** (next/font) as the global font
+- [ ] Wire the **color palette** as CSS variables + Tailwind theme tokens (`void…snow`, see Design System)
+- [ ] Build the liquid-glass primitive components: `GlassCard`, `PillButton` (rounded-full), `PillInput`, `Badge`, `StatusChip`, `Toast` — with motion baked in
+- [ ] Layout shell, nav, toast system; global backdrop-blur + void shadow treatment
+- [ ] API client to backend; devnet config
 
-### 6b. Screens
-- [ ] **Connect wallet** landing with the pitch + tagline
+### 6b. Auth — Privy (custom UI, not the default modal)
+- [ ] Integrate `@privy-io/react-auth`; configure app id; disable the default login modal
+- [ ] Custom login screen: email input (pill) + **Google** and **X** social buttons (HugeIcons social icons), all in our glass/pill style
+- [ ] Embedded/linked Solana wallet via Privy for signing devnet txns
+- [ ] Session/user context; sign-out; gate app routes on auth
+
+### 6c. Screens
+- [ ] **Landing** with the pitch + tagline + custom login
 - [ ] **Create Private Job** — task, agent type, budget, verification badge; client-side prompt encryption before submit
 - [ ] **Agent catalog / profile** — measurement, price, live reputation, verification rate
-- [ ] **Job dashboard** — table (job, agent, status, cost) with live status
+- [ ] **Job dashboard** — table (job, agent, status, cost) with live status (Supabase Realtime/SSE)
 - [ ] **Job detail** — redacted private task, status checklist (Escrowed→Executed→Attested→Verified→Settled), commitments, Solana settlement link
 - [ ] **Verification screen** — 🟡 Verifying… → ✅ VERIFIED showing *both* checks (quote valid + measurement allowlisted)
 
-### 6c. Motion & polish
+### 6d. Motion & polish
 - [ ] Framer transitions for status changes; "prompt disappears into private state" animation
 - [ ] Explorer-comparison component (naive memo vs VeilAI commitment) for the reveal
-- [ ] Loading/skeleton states; empty states; error states
+- [ ] Loading/skeleton states; empty states; error states; consistent pill + glass motion
 
 ---
 
