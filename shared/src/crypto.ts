@@ -76,6 +76,11 @@ export function edSign(secret: Uint8Array, msg: Uint8Array): Uint8Array {
   return ed25519.sign(msg, secret);
 }
 
+/** ed25519 public key (base58) from a 32-byte secret seed. */
+export function edPublicFromSecret(secret: Uint8Array): string {
+  return bs58.encode(ed25519.getPublicKey(secret));
+}
+
 export function edVerify(pubB58: string, sig: Uint8Array, msg: Uint8Array): boolean {
   return ed25519.verify(sig, msg, bs58.decode(pubB58));
 }
