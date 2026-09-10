@@ -2,6 +2,7 @@ use anchor_lang::prelude::*;
 use ephemeral_rollups_sdk::anchor::ephemeral;
 
 pub mod constants;
+pub mod ed25519;
 pub mod errors;
 pub mod instructions;
 pub mod state;
@@ -95,5 +96,25 @@ pub mod veilai {
     /// Provider marks the delegated job as executing (ER).
     pub fn execute_marker(ctx: Context<ExecuteMarker>) -> Result<()> {
         instructions::execute_marker::handler(ctx)
+    }
+
+    // ─── Phase 3: Attestation verification ──────────────────────────────
+
+    /// Verify the enclave attestation (Ed25519 precompile + measurement
+    /// allowlist) and record Verified/Rejected. See `verify_attestation.rs`.
+    pub fn verify_attestation(
+        ctx: Context<VerifyAttestation>,
+        output_commitment: [u8; 32],
+        mrtd: [u8; MEASUREMENT_LEN],
+        signature: [u8; 64],
+        ed25519_ix_index: u8,
+    ) -> Result<()> {
+        instructions::verify_attestation::handler(
+            ctx,
+            output_commitment,
+            mrtd,
+            signature,
+            ed25519_ix_index,
+        )
     }
 }
