@@ -265,12 +265,14 @@ VeilAI/
 
 **Goal:** win the room.
 
-- [ ] Seed one real agent (ResearchBot) with genuine measurement; verify profile shows live stats
-- [ ] Rehearse the 3-min demo script (PRD §19), including the INVALID reveal
-- [ ] Pre-warm ER/validator; prepare fallback recording
-- [ ] Write submission README: architecture diagram, two-TEE model, what's real vs stubbed (honesty slide)
-- [ ] Deploy frontend (Vercel) + backend (Railway/Render); publish devnet program ID
-- [ ] Short architecture explainer / pitch deck (privacy hook, verification innovation, business model)
+- [x] Supabase schema applied (`pnpm --filter @veilai/backend migrate`) + **ResearchBot agent seeded** with the enclave's real measurement + quoting key (`… seed`)
+- [x] Backend verified against **live Supabase** (`/health` db:true, `/agents` serves ResearchBot) + **off-chain smoke test green** (real Claude inference → attest → verify: `backend/scripts/smoke.ts`)
+- [x] Enclave quoting secret + measurement generated and wired (`backend/.env`) so stub enclave and seeded agent match
+- [x] **Submission README** — architecture, two-TEE model, honest verification, real-vs-stubbed honesty slide, devnet proofs, run instructions
+- [ ] Wire frontend → live backend end-to-end run-through (frontend builds; needs `frontend/.env.local` + backend running)
+- [ ] Explorer-comparison reveal component (naive memo vs commitment)
+- [ ] Deploy frontend (Vercel) + backend (Railway/Render) — needs your hosting accounts
+- [ ] Rehearse 3-min demo (incl. INVALID reveal); pre-warm ER; backup recording; pitch deck
 
 ---
 
