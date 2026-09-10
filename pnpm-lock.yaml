@@ -213,6 +213,12 @@ importers:
       '@hugeicons/react':
         specifier: ^1.0.5
         version: 1.1.10(react@19.2.8)
+      '@noble/curves':
+        specifier: ^1.7.0
+        version: 1.9.7
+      '@noble/hashes':
+        specifier: ^1.6.1
+        version: 1.8.0
       '@privy-io/react-auth':
         specifier: ^2.0.0
         version: 2.25.0(9449ccef9162f2558f06dcdd2ea7e528)
@@ -234,6 +240,9 @@ importers:
       '@veilai/shared':
         specifier: workspace:*
         version: link:../shared
+      bs58:
+        specifier: ^6.0.0
+        version: 6.0.0
       framer-motion:
         specifier: ^11.15.0
         version: 11.18.2(@emotion/is-prop-valid@1.4.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)

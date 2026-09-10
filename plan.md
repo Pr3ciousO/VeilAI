@@ -215,32 +215,33 @@ VeilAI/
 
 **Goal:** the polished lifecycle the judges see: Submit → Verifying → Verified → Paid — in a liquid-glass, Space Grotesk UI.
 
-### 6a. Setup & design system
-- [x] `create-next-app` (App Router, TS, Tailwind) — scaffolded in Phase 0 (Framer Motion, HugeIcons, wallet-adapter installed)
-- [ ] Load **Space Grotesk** (next/font) as the global font
-- [ ] Wire the **color palette** as CSS variables + Tailwind theme tokens (`void…snow`, see Design System)
-- [ ] Build the liquid-glass primitive components: `GlassCard`, `PillButton` (rounded-full), `PillInput`, `Badge`, `StatusChip`, `Toast` — with motion baked in
-- [ ] Layout shell, nav, toast system; global backdrop-blur + void shadow treatment
-- [ ] API client to backend; devnet config
+### 6a. Setup & design system ✅
+- [x] Next.js 16 App Router + Tailwind v4 (read bundled Next 16 docs first)
+- [x] **Space Grotesk** via `next/font` as the global font
+- [x] **Color palette** as Tailwind v4 `@theme` tokens (`void…snow` + verify/reject/pending) in `globals.css`
+- [x] Liquid-glass primitives (`components/ui/index.tsx`): `GlassCard`, `PillButton`, `PillInput`, `GlassTextArea`, `StatusChip`, `Badge` — Framer motion baked in; `glass`/`glass-raised` utilities
+- [x] `AppNav` shell; global radial-glow bg + backdrop-blur; `cn` helper
+- [x] API client (`lib/api.ts`); `lib/format.ts`; client user-key helper (`lib/userkey.ts`) for sealing output back
 
-### 6b. Auth — Privy (custom UI, not the default modal)
-- [ ] Integrate `@privy-io/react-auth`; configure app id; disable the default login modal
-- [ ] Custom login screen: email input (pill) + **Google** and **X** social buttons (HugeIcons social icons), all in our glass/pill style
-- [ ] Embedded/linked Solana wallet via Privy for signing devnet txns
-- [ ] Session/user context; sign-out; gate app routes on auth
+### 6b. Auth — Privy custom UI ✅
+- [x] `@privy-io/react-auth` provider (`app/providers.tsx`), default modal disabled, dark theme, embedded Solana wallet
+- [x] Custom login (`components/auth/CustomLogin.tsx`): email-code flow + **Google** + **X** (HugeIcons), all glass/pill
+- [x] Sign-out in nav; landing gates on `authenticated`; graceful when Privy unconfigured
 
-### 6c. Screens
-- [ ] **Landing** with the pitch + tagline + custom login
-- [ ] **Create Private Job** — task, agent type, budget, verification badge; client-side prompt encryption before submit
-- [ ] **Agent catalog / profile** — measurement, price, live reputation, verification rate
-- [ ] **Job dashboard** — table (job, agent, status, cost) with live status (Supabase Realtime/SSE)
-- [ ] **Job detail** — redacted private task, status checklist (Escrowed→Executed→Attested→Verified→Settled), commitments, Solana settlement link
-- [ ] **Verification screen** — 🟡 Verifying… → ✅ VERIFIED showing *both* checks (quote valid + measurement allowlisted)
+### 6c. Screens ✅ (build green, 7 routes)
+- [x] **Landing** — pitch + tagline + custom login
+- [x] **Create Private Job** — task, agent picker, budget; **client-side x25519 prompt encryption** to the enclave key before submit
+- [x] **Agent catalog** — measurement (MRTD), price, verification rate, counts
+- [x] **Dashboard** — jobs table with status chips
+- [x] **Job detail** — redacted task, lifecycle checklist (Escrowed→Executed→Attested→Verified→Settled), **run-in-enclave → Verifying… → ✅ VERIFIED/❌ REJECTED** showing *both* checks, result commitment, and in-browser result decrypt
 
 ### 6d. Motion & polish
-- [ ] Framer transitions for status changes; "prompt disappears into private state" animation
-- [ ] Explorer-comparison component (naive memo vs VeilAI commitment) for the reveal
-- [ ] Loading/skeleton states; empty states; error states; consistent pill + glass motion
+- [x] Framer transitions on cards, status changes, verification reveal; spinner during verify
+- [x] Loading / empty / error states across screens
+- [ ] Explorer-comparison component (naive memo vs commitment) for the demo reveal — *Phase 8*
+- [ ] Supabase Realtime live status push — *Phase 7*
+
+> **Phase 6 status:** frontend **builds green** (7 routes, TS clean). Runtime needs: backend running + Supabase provisioned, and the frontend's `NEXT_PUBLIC_*` vars in **`frontend/.env.local`** (Next only reads env from the frontend project dir, not the repo-root `.env`) — `NEXT_PUBLIC_PRIVY_APP_ID`, `NEXT_PUBLIC_BACKEND_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
 
 ---
 
