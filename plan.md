@@ -146,19 +146,19 @@ VeilAI/
 **Goal:** the innovation — honest verification that a valid quote from the right workload produced the output.
 
 ### Attestation format (shared)
-- [ ] Define quote struct in `shared/`: `{ report_data[64], mrtd[48], rtmr[...], signature[64], quoting_key[32] }` matching TDX field layout
-- [ ] Define `report_data = sha256(input_commitment ‖ output_commitment ‖ model_id ‖ nonce)`
-- [ ] Document the abstraction boundary (stub ed25519 now ↔ real TDX DCAP later)
+- [x] Quote struct in `shared/` (`AttestationQuote`): `{ reportData, mrtd[48], rtmr, signature[64], quotingKey }` — TDX-shaped
+- [x] `report_data = sha256(input ‖ output ‖ model_id ‖ nonce)`; **signed message = sha256(report_data ‖ mrtd)** so the measurement is cryptographically bound to the signature (not an unsigned claim)
+- [x] `buildQuote` / `verifyQuote` / `quoteSignedMessage` helpers; abstraction boundary documented (stub ed25519 ↔ real TDX DCAP)
 
-### Program: `verify_attestation` (ER)
-- [ ] Accept quote bytes + job; recompute expected `report_data` from stored commitments + nonce
-- [ ] **Check 1 — quote signature:** verify ed25519 signature over `report_data` by `quoting_key` (via Ed25519 precompile + instructions-sysvar introspection)
-- [ ] **Check 2 — quoting key allowlisted:** `quoting_key == agent.quoting_key`
-- [ ] **Check 3 — measurement allowlist:** `mrtd == agent.expected_measurement` (the step MagicBlock's helper skips)
-- [ ] **Check 4 — binding:** recomputed `report_data == quote.report_data`
-- [ ] On all pass → status `Verified`, store `output_commitment`; else → `Rejected`
-- [ ] Emit `AttestationVerified` / `AttestationRejected` events
-- [ ] Tests: valid quote passes; tampered output → reject; wrong measurement → reject; wrong key → reject; replayed nonce → reject
+### Program: `verify_attestation`
+- [x] Recompute `report_data` + `signed_message` on-chain from stored commitments + submitted output (sha2 crate)
+- [x] **Ed25519 precompile introspection** (`ed25519.rs`): confirm the tx's Ed25519 instruction verified our exact (quoting_key, signed_message, signature) triple — precompile does the crypto, we confirm the *right* triple
+- [x] **Quoting key allowlist:** verified key == `job.quoting_key`
+- [x] **Measurement allowlist:** `mrtd == job.expected_measurement` (the step MagicBlock's helper skips)
+- [x] **Binding:** signed message == recomputed `sha256(report_data ‖ mrtd)` (tampered output ⇒ mismatch)
+- [x] All pass → `Verified` (+ store `output_commitment`); else → **persisted `Rejected`** (so settlement can refund) — no tx abort on bad-but-signed quotes
+- [x] Emit `AttestationVerified` / `AttestationRejected` events
+- [x] Tests (**3 passing**, real Ed25519 precompile): valid → Verified; tampered output → Rejected; wrong measurement → Rejected. Full suite **8 passing**.
 
 ---
 

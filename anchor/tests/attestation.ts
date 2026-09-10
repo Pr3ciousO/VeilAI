@@ -57,7 +57,7 @@ describe("veilai — phase 3 (attestation verification)", () => {
         Array.from(quoting.publicKey),
         new anchor.BN(30_000),
       )
-      .accounts({ authority: authority.publicKey })
+      .accountsPartial({ authority: authority.publicKey })
       .rpc()
       .catch(() => {}); // idempotent across suites sharing the wallet
   });
@@ -80,17 +80,17 @@ describe("veilai — phase 3 (attestation verification)", () => {
 
     await program.methods
       .createJob(jobId, Array.from(promptCommitment), Array.from(inputCommitment), Array.from(nonce), new anchor.BN(50_000))
-      .accounts({ job: jobPda, agent: agentPda, creator: authority.publicKey })
+      .accountsPartial({ job: jobPda, agent: agentPda, creator: authority.publicKey })
       .rpc();
 
     await program.methods
       .depositEscrow()
-      .accounts({ job: jobPda, creator: authority.publicKey, usdcMint, creatorAta, escrowAuthority })
+      .accountsPartial({ job: jobPda, creator: authority.publicKey, usdcMint, creatorAta, escrowAuthority })
       .rpc();
 
     await program.methods
       .executeMarker()
-      .accounts({ job: jobPda, provider: authority.publicKey })
+      .accountsPartial({ job: jobPda, provider: authority.publicKey })
       .rpc();
 
     return { jobId, jobPda, inputCommitment, nonce };
@@ -119,7 +119,7 @@ describe("veilai — phase 3 (attestation verification)", () => {
 
     await program.methods
       .verifyAttestation(Array.from(output), Array.from(measurement), Array.from(sig), 0)
-      .accounts({ job: jobPda, provider: authority.publicKey, instructionsSysvar: SYSVAR_INSTRUCTIONS_PUBKEY })
+      .accountsPartial({ job: jobPda, provider: authority.publicKey, instructionsSysvar: SYSVAR_INSTRUCTIONS_PUBKEY })
       .preInstructions([edIx])
       .rpc();
 
@@ -147,7 +147,7 @@ describe("veilai — phase 3 (attestation verification)", () => {
 
     await program.methods
       .verifyAttestation(Array.from(tamperedOutput), Array.from(measurement), Array.from(sig), 0)
-      .accounts({ job: jobPda, provider: authority.publicKey, instructionsSysvar: SYSVAR_INSTRUCTIONS_PUBKEY })
+      .accountsPartial({ job: jobPda, provider: authority.publicKey, instructionsSysvar: SYSVAR_INSTRUCTIONS_PUBKEY })
       .preInstructions([edIx])
       .rpc();
 
@@ -174,7 +174,7 @@ describe("veilai — phase 3 (attestation verification)", () => {
 
     await program.methods
       .verifyAttestation(Array.from(output), Array.from(wrongMeasurement), Array.from(sig), 0)
-      .accounts({ job: jobPda, provider: authority.publicKey, instructionsSysvar: SYSVAR_INSTRUCTIONS_PUBKEY })
+      .accountsPartial({ job: jobPda, provider: authority.publicKey, instructionsSysvar: SYSVAR_INSTRUCTIONS_PUBKEY })
       .preInstructions([edIx])
       .rpc();
 

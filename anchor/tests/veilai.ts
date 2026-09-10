@@ -68,7 +68,7 @@ describe("veilai — phase 1 (job lifecycle)", () => {
   it("registers an agent", async () => {
     await program.methods
       .registerAgent(modelId, measurement, quotingKey, price)
-      .accounts({ authority: providerKp.publicKey })
+      .accountsPartial({ authority: providerKp.publicKey })
       .signers([providerKp])
       .rpc();
 
@@ -83,7 +83,7 @@ describe("veilai — phase 1 (job lifecycle)", () => {
   it("creates a private job", async () => {
     await program.methods
       .createJob(jobId, promptCommitment, inputCommitment, nonce, budget)
-      .accounts({ job: jobPda, agent: agentPda, creator: creator.publicKey })
+      .accountsPartial({ job: jobPda, agent: agentPda, creator: creator.publicKey })
       .rpc();
 
     const job = await program.account.job.fetch(jobPda);
@@ -101,7 +101,7 @@ describe("veilai — phase 1 (job lifecycle)", () => {
   it("deposits escrow and flips status to Escrowed", async () => {
     await program.methods
       .depositEscrow()
-      .accounts({ job: jobPda, creator: creator.publicKey, usdcMint, creatorAta, escrowAuthority })
+      .accountsPartial({ job: jobPda, creator: creator.publicKey, usdcMint, creatorAta, escrowAuthority })
       .rpc();
 
     const job = await program.account.job.fetch(jobPda);
@@ -116,7 +116,7 @@ describe("veilai — phase 1 (job lifecycle)", () => {
     try {
       await program.methods
         .depositEscrow()
-        .accounts({ job: jobPda, creator: creator.publicKey, usdcMint, creatorAta, escrowAuthority })
+        .accountsPartial({ job: jobPda, creator: creator.publicKey, usdcMint, creatorAta, escrowAuthority })
         .rpc();
       assert.fail("expected BadStatus error");
     } catch (err: any) {
@@ -133,7 +133,7 @@ describe("veilai — phase 1 (job lifecycle)", () => {
     try {
       await program.methods
         .createJob(badJobId, promptCommitment, inputCommitment, nonce, new anchor.BN(0))
-        .accounts({ job: badJobPda, agent: agentPda, creator: creator.publicKey })
+        .accountsPartial({ job: badJobPda, agent: agentPda, creator: creator.publicKey })
         .rpc();
       assert.fail("expected InvalidBudget error");
     } catch (err: any) {
