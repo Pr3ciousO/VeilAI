@@ -159,6 +159,14 @@ export default function JobDetail({ params }: PageProps<"/jobs/[id]">) {
                       <div className="rounded-2xl border border-ash bg-onyx/60 p-4 text-sm text-mist whitespace-pre-wrap">
                         {result}
                       </div>
+                    ) : revealErr ? (
+                      <div className="rounded-2xl border border-ash bg-onyx/60 p-4">
+                        <div className="text-sm text-fog">{revealErr}</div>
+                        <p className="mt-2 text-xs text-steel">
+                          The commitment above still proves what was produced — verification never
+                          needs the plaintext.
+                        </p>
+                      </div>
                     ) : (
                       <PillButton variant="ghost" onClick={reveal}>
                         Reveal result (decrypt in browser)
