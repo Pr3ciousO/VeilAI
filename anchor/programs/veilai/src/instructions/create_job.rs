@@ -22,6 +22,7 @@ pub fn handler(
     job.job_id = job_id;
     job.creator = ctx.accounts.creator.key();
     job.agent = agent.key();
+    job.provider = agent.authority;
     job.status = JobStatus::Created;
     job.attestation_status = AttestationStatus::None;
     job.budget = budget;

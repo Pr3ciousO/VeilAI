@@ -7,6 +7,7 @@ pub mod instructions;
 pub mod state;
 
 use constants::MEASUREMENT_LEN;
+use ephemeral_rollups_sdk::access_control::structs::Member;
 use instructions::*;
 
 declare_id!("86unmnYc6pGfmmCwFLBjbiVT9pd3vJA5CaAzyreYewPT");
@@ -63,5 +64,36 @@ pub mod veilai {
     /// execution — the funds verification will later release or refund.
     pub fn deposit_escrow(ctx: Context<DepositEscrow>) -> Result<()> {
         instructions::deposit_escrow::handler(ctx)
+    }
+
+    // ─── Phase 2: MagicBlock PER ────────────────────────────────────────
+
+    /// Delegate the Job data PDA into the (private) Ephemeral Rollup (base layer).
+    pub fn delegate_job(ctx: Context<DelegateJob>, job_id: u64) -> Result<()> {
+        instructions::delegate_job::handler(ctx, job_id)
+    }
+
+    /// Create the job's EphemeralPermission on the ER (members = creator+provider).
+    pub fn init_permission(ctx: Context<PermissionContext>, members: Vec<Member>) -> Result<()> {
+        instructions::permission::init_permission(ctx, members)
+    }
+
+    /// Replace the job's EphemeralPermission member list on the ER.
+    pub fn set_permission(
+        ctx: Context<PermissionContext>,
+        is_private: bool,
+        members: Vec<Member>,
+    ) -> Result<()> {
+        instructions::permission::set_permission(ctx, is_private, members)
+    }
+
+    /// Close the job's EphemeralPermission on the ER (before undelegation).
+    pub fn close_permission(ctx: Context<PermissionContext>) -> Result<()> {
+        instructions::permission::close_permission(ctx)
+    }
+
+    /// Provider marks the delegated job as executing (ER).
+    pub fn execute_marker(ctx: Context<ExecuteMarker>) -> Result<()> {
+        instructions::execute_marker::handler(ctx)
     }
 }

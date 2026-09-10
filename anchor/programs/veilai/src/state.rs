@@ -58,6 +58,8 @@ pub struct Job {
     pub creator: Pubkey,
     /// The Agent PDA selected for this job.
     pub agent: Pubkey,
+    /// Provider wallet (agent.authority), copied so ER-side auth needs no agent read.
+    pub provider: Pubkey,
     pub status: JobStatus,
     pub attestation_status: AttestationStatus,
     /// USDC base units held in escrow for this job.
@@ -86,6 +88,7 @@ impl Job {
         + 8                         // job_id
         + 32                        // creator
         + 32                        // agent
+        + 32                        // provider
         + 1                         // status
         + 1                         // attestation_status
         + 8                         // budget
