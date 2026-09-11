@@ -13,6 +13,7 @@ import { config } from "../config.js";
 import { enclavePublicKey } from "../enclave/key.js";
 import { chainEnabled } from "../chain/client.js";
 import { registerAgentOnChain } from "../chain/lifecycle.js";
+import { requireAuth, optionalAuth } from "../auth.js";
 
 export const agentsRouter = Router();
 
@@ -26,8 +27,6 @@ const CreateAgent = z.object({
   maxTokens: z.number().int().min(256).max(8192).default(4096),
   price: z.number().int().nonnegative(),
   capabilities: z.array(z.string()).default([]),
-  /** Privy user id of the lister, for "my agents". */
-  creator: z.string().optional(),
 });
 
 /** Public columns — never the sealed system prompt. */
@@ -37,10 +36,17 @@ const PUBLIC_COLUMNS =
   "rejected, reputation, avg_latency_ms, temperature, max_tokens, creator, " +
   "register_tx, created_at";
 
-agentsRouter.get("/", async (req, res, next) => {
+/**
+ * The marketplace is public. `?mine=1` narrows to the caller's own listings and
+ * therefore needs a token — the creator comes from it, never from the query.
+ */
+agentsRouter.get("/", optionalAuth, async (req, res, next) => {
   try {
     let q = db().from("agents").select(PUBLIC_COLUMNS).order("created_at", { ascending: false });
-    if (typeof req.query.creator === "string") q = q.eq("creator", req.query.creator);
+    if (req.query.mine === "1") {
+      if (!req.userId) return res.status(401).json({ error: "Missing bearer token" });
+      q = q.eq("creator", req.userId);
+    }
     const { data, error } = await q;
     if (error) throw error;
     res.json({ agents: data });
@@ -75,7 +81,7 @@ agentsRouter.get("/:id", async (req, res, next) => {
  * because a Privy login has no funded devnet wallet. `creator` records who
  * listed it.
  */
-agentsRouter.post("/", async (req, res, next) => {
+agentsRouter.post("/", requireAuth, async (req, res, next) => {
   try {
     const body = CreateAgent.parse(req.body);
 
@@ -130,7 +136,7 @@ agentsRouter.post("/", async (req, res, next) => {
         quoting_key: quotingKeyB58,
         price: body.price,
         capabilities: body.capabilities,
-        creator: body.creator ?? null,
+        creator: req.userId!,
         register_tx: onChain.signature,
       })
       .select(PUBLIC_COLUMNS)

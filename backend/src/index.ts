@@ -3,15 +3,30 @@ import cors from "cors";
 import { ZodError } from "zod";
 import { config } from "./config.js";
 import { dbConfigured } from "./db/client.js";
+import { authConfigured } from "./auth.js";
 import { agentsRouter } from "./routes/agents.js";
 import { jobsRouter } from "./routes/jobs.js";
 
 const app = express();
-app.use(cors());
+
+// Locked to the deployed frontend in production; open only when CORS_ORIGINS
+// is unset, which is the local-development case.
+app.use(
+    cors(
+        config.corsOrigins.length
+            ? { origin: config.corsOrigins, credentials: true }
+            : undefined,
+    ),
+);
 app.use(express.json({ limit: "2mb" }));
 
 app.get("/health", (_req, res) => {
-    res.json({ status: "ok", service: "veilai-backend", db: dbConfigured() });
+    res.json({
+        status: "ok",
+        service: "veilai-backend",
+        db: dbConfigured(),
+        auth: authConfigured(),
+    });
 });
 
 app.use("/agents", agentsRouter);
