@@ -153,7 +153,16 @@ jobsRouter.post("/:id/execute", async (req, res, next) => {
     await setStatus(job.id, JobStatus.Executing);
     await recordEvent(job.id, "executing");
 
-    const modelId = job.model_id ?? "claude-opus-4-8";
+    // `create_job` copies model_id from the Agent account, so report_data is
+    // bound to the *agent's* model. Deriving it from anywhere else (there is no
+    // jobs.model_id column) makes the on-chain check fail on honest jobs.
+    const { data: agent } = await db()
+      .from("agents")
+      .select("model_id, quoting_key")
+      .eq("id", job.agent_id)
+      .single();
+    const modelId = agent?.model_id ?? "claude-opus-4-8";
+
     const out = await enclave.run({
       promptBox: job.prompt_ciphertext as SealedBox,
       userPublicKeyB58,
@@ -166,14 +175,6 @@ jobsRouter.post("/:id/execute", async (req, res, next) => {
     const submittedOutputCommitment = tamper
       ? commitString(`tampered:${out.outputCommitment}`)
       : out.outputCommitment;
-
-    // The agent's registered quoting key is the allowlist — comparing the quote
-    // against its own key would make this check vacuous.
-    const { data: agent } = await db()
-      .from("agents")
-      .select("quoting_key")
-      .eq("id", job.agent_id)
-      .single();
 
     // Off-chain mirror, for the per-check UI breakdown. The verdict that decides
     // payment is the program's, below.

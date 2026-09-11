@@ -3,7 +3,13 @@
 import { use, useEffect, useState } from "react";
 import { AppNav } from "@/components/AppNav";
 import { GlassCard, PillButton, StatusChip, Badge } from "@/components/ui";
-import { api, type Job, type AttestationCheckDTO } from "@/lib/api";
+import {
+  api,
+  explorerTx,
+  explorerAddress,
+  type Job,
+  type AttestationCheckDTO,
+} from "@/lib/api";
 import { usdc, short } from "@/lib/format";
 import { getUserKey, openResult } from "@/lib/userkey";
 import { motion, AnimatePresence } from "framer-motion";
@@ -26,13 +32,13 @@ export default function JobDetail({ params }: PageProps<"/jobs/[id]">) {
     refresh().catch((e) => setErr(e.message));
   }, [id]);
 
-  async function runEnclave() {
+  async function runEnclave(tamper = false) {
     if (!job) return;
     setErr(null);
     setRunning(true);
     try {
       const { publicB58 } = getUserKey();
-      await api.execute(job.id, publicB58);
+      await api.execute(job.id, publicB58, tamper);
       await refresh();
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Execution failed");
@@ -144,8 +150,10 @@ export default function JobDetail({ params }: PageProps<"/jobs/[id]">) {
                     </div>
                     <div className="text-xs text-fog">
                       {verified
-                        ? "All four on-chain checks passed"
-                        : `Rejected on-chain — ${failedCheck?.reason ?? "attestation invalid"} · escrow refunded`}
+                        ? job.job_pda
+                          ? "All four checks passed on-chain · escrow released"
+                          : "All four checks passed (off-chain only)"
+                        : `Rejected — ${job.on_chain_reason ?? failedCheck?.reason ?? "attestation invalid"} · escrow refunded`}
                     </div>
                   </div>
                 </div>
@@ -200,19 +208,52 @@ export default function JobDetail({ params }: PageProps<"/jobs/[id]">) {
 
         {/* Action */}
         {!verified && !rejected && (
-          <PillButton onClick={runEnclave} disabled={running} className="w-full">
-            {running ? (
-              <span className="flex items-center gap-2">
-                <motion.span animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: "linear" }}>
-                  <HugeiconsIcon icon={Loading03Icon} size={16} />
-                </motion.span>
-                Verifying…
-              </span>
-            ) : (
-              "Run in enclave → attest → verify"
-            )}
-          </PillButton>
+          <div className="flex flex-col gap-2">
+            <PillButton onClick={() => runEnclave(false)} disabled={running} className="w-full">
+              {running ? (
+                <span className="flex items-center gap-2">
+                  <motion.span animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: "linear" }}>
+                    <HugeiconsIcon icon={Loading03Icon} size={16} />
+                  </motion.span>
+                  Verifying on-chain…
+                </span>
+              ) : (
+                "Run in enclave → attest → verify on-chain"
+              )}
+            </PillButton>
+            {/* Submits a commitment the enclave never signed — the program
+                catches it and the escrow refunds. */}
+            <button
+              onClick={() => runEnclave(true)}
+              disabled={running}
+              className="text-xs text-steel underline underline-offset-4 transition-colors hover:text-reject disabled:opacity-40"
+            >
+              Run with a tampered result (demo the rejection path)
+            </button>
+          </div>
         )}
+
+        {/* On-chain provenance — every claim above is checkable in the explorer. */}
+        <GlassCard className="mt-4 p-6">
+          <div className="text-[11px] uppercase tracking-wider text-steel">On-chain</div>
+          {job.job_pda ? (
+            <div className="mt-3 flex flex-col gap-2">
+              <TxRow label="Job account" value={job.job_pda} kind="address" />
+              <TxRow label="create_job" value={job.create_tx} />
+              <TxRow label="deposit_escrow" value={job.escrow_tx} />
+              <TxRow label="execute_marker" value={job.execute_tx} />
+              <TxRow label="verify_attestation" value={job.verify_tx} />
+              <TxRow
+                label={verified ? "settle_payment" : "refund_escrow"}
+                value={job.settlement_tx}
+              />
+            </div>
+          ) : (
+            <p className="mt-2 text-xs text-pending">
+              This job was recorded off-chain only — no escrow and no on-chain verification.
+            </p>
+          )}
+        </GlassCard>
 
         <div className="mt-4 flex flex-wrap gap-2">
           <Badge>nonce {short(job.nonce)}</Badge>
@@ -222,6 +263,34 @@ export default function JobDetail({ params }: PageProps<"/jobs/[id]">) {
         {err && <p className="mt-3 text-xs text-reject">{err}</p>}
       </main>
     </>
+  );
+}
+
+function TxRow({
+  label,
+  value,
+  kind = "tx",
+}: {
+  label: string;
+  value: string | null;
+  kind?: "tx" | "address";
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <span className="font-mono text-xs text-fog">{label}</span>
+      {value ? (
+        <a
+          href={kind === "tx" ? explorerTx(value) : explorerAddress(value)}
+          target="_blank"
+          rel="noreferrer"
+          className="font-mono text-xs text-verify underline underline-offset-4 hover:text-snow"
+        >
+          {short(value, 8)} ↗
+        </a>
+      ) : (
+        <span className="font-mono text-xs text-steel">—</span>
+      )}
+    </div>
   );
 }
 

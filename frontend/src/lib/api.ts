@@ -48,6 +48,22 @@ export interface Job {
   /** Per-check verifier results; null until the job has been executed. */
   attestation_checks: AttestationCheckDTO[] | null;
   model_id: string | null;
+  /** On-chain provenance; null when the job was recorded off-chain only. */
+  job_pda: string | null;
+  create_tx: string | null;
+  escrow_tx: string | null;
+  execute_tx: string | null;
+  verify_tx: string | null;
+  settlement_tx: string | null;
+  on_chain_reason: string | null;
+}
+
+export function explorerTx(sig: string): string {
+  return `https://explorer.solana.com/tx/${sig}?cluster=devnet`;
+}
+
+export function explorerAddress(addr: string): string {
+  return `https://explorer.solana.com/address/${addr}?cluster=devnet`;
 }
 
 export interface AttestationCheckDTO {
@@ -92,11 +108,17 @@ export const api = {
   jobsCreate: (body: CreateJobBody) =>
     req<{ job: Job }>("/jobs", { method: "POST", body: JSON.stringify(body) }),
   enclavePubkey: () => req<{ x25519PublicKey: string }>("/jobs/enclave/pubkey"),
-  execute: (id: string, userPublicKey: string) =>
-    req<{ ok: boolean; verified: boolean; outputCommitment: string }>(
-      `/jobs/${id}/execute`,
-      { method: "POST", body: JSON.stringify({ userPublicKey }) },
-    ),
+  execute: (id: string, userPublicKey: string, tamper = false) =>
+    req<{
+      ok: boolean;
+      verified: boolean;
+      reason: string | null;
+      onChain: boolean;
+      outputCommitment: string;
+    }>(`/jobs/${id}/execute`, {
+      method: "POST",
+      body: JSON.stringify({ userPublicKey, tamper }),
+    }),
   result: (id: string) =>
     req<{
       result: {
