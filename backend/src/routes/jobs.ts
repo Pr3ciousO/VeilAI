@@ -12,6 +12,7 @@ import {
 } from "@veilai/shared";
 import { enclaveFromEnv } from "../enclave/stub.js";
 import { enclaveSecret, enclavePublicKey } from "../enclave/key.js";
+import { requireAuth, assertOwner } from "../auth.js";
 import { chainEnabled } from "../chain/client.js";
 import { createJobOnChain, verifyOnChain } from "../chain/lifecycle.js";
 
@@ -64,11 +65,14 @@ jobsRouter.get("/showcase", async (_req, res, next) => {
   }
 });
 
-jobsRouter.get("/", async (req, res, next) => {
+/** Always the caller's own jobs — the creator is taken from the token, not the query. */
+jobsRouter.get("/", requireAuth, async (req, res, next) => {
   try {
-    let q = db().from("jobs").select("*").order("created_at", { ascending: false });
-    if (typeof req.query.creator === "string") q = q.eq("creator", req.query.creator);
-    const { data, error } = await q;
+    const { data, error } = await db()
+      .from("jobs")
+      .select("*")
+      .eq("creator", req.userId!)
+      .order("created_at", { ascending: false });
     if (error) throw error;
     res.json({ jobs: data });
   } catch (e) {
@@ -76,17 +80,18 @@ jobsRouter.get("/", async (req, res, next) => {
   }
 });
 
-jobsRouter.get("/:id", async (req, res, next) => {
+jobsRouter.get("/:id", requireAuth, async (req, res, next) => {
   try {
     const { data, error } = await db().from("jobs").select("*").eq("id", req.params.id).single();
-    if (error) throw error;
+    if (error || !data) return res.status(404).json({ error: "Not found" });
+    if (!assertOwner(res, data.creator, req.userId)) return;
     res.json({ job: data });
   } catch (e) {
     next(e);
   }
 });
 
-jobsRouter.post("/", async (req, res, next) => {
+jobsRouter.post("/", requireAuth, async (req, res, next) => {
   try {
     const body = CreateJob.parse(req.body);
     const { data, error } = await db()
@@ -94,7 +99,9 @@ jobsRouter.post("/", async (req, res, next) => {
       .insert({
         id: body.id,
         job_id: body.jobId,
-        creator: body.creator,
+        // From the verified token — a body-supplied creator is only a claim,
+        // and ownership checks elsewhere depend on this being trustworthy.
+        creator: req.userId!,
         agent_id: body.agentId,
         provider: body.provider,
         title: body.title ?? null,
@@ -163,12 +170,14 @@ jobsRouter.post("/", async (req, res, next) => {
  * signed, simulating a provider that returns something other than what it ran.
  * The program catches it; this is the demo's rejection path.
  */
-jobsRouter.post("/:id/execute", async (req, res, next) => {
+jobsRouter.post("/:id/execute", requireAuth, async (req, res, next) => {
   try {
     const userPublicKeyB58 = z.string().parse(req.body?.userPublicKey);
     const tamper = z.boolean().optional().parse(req.body?.tamper) ?? false;
     const { data: job, error } = await db().from("jobs").select("*").eq("id", req.params.id).single();
-    if (error) throw error;
+    if (error || !job) return res.status(404).json({ error: "Not found" });
+    // Execution spends the job's escrow — only its owner may trigger it.
+    if (!assertOwner(res, job.creator, req.userId)) return;
 
     await setStatus(job.id, JobStatus.Executing);
     await recordEvent(job.id, "executing");
@@ -298,17 +307,21 @@ jobsRouter.post("/:id/execute", async (req, res, next) => {
   }
 });
 
-jobsRouter.get("/:id/result", async (req, res, next) => {
+jobsRouter.get("/:id/result", requireAuth, async (req, res, next) => {
   try {
     const { data, error } = await db()
       .from("jobs")
       .select(
-        "id, status, output_commitment, output_ciphertext, output_recipient_pubkey, attestation_checks, attestation_quote",
+        "id, creator, status, output_commitment, output_ciphertext, output_recipient_pubkey, attestation_checks, attestation_quote",
       )
       .eq("id", req.params.id)
       .single();
-    if (error) throw error;
-    res.json({ result: data });
+    if (error || !data) return res.status(404).json({ error: "Not found" });
+    // The ciphertext is only openable by the recipient key, but serving it to
+    // anyone leaks that the job exists and lets it be harvested for later.
+    if (!assertOwner(res, data.creator, req.userId)) return;
+    const { creator: _creator, ...result } = data;
+    res.json({ result });
   } catch (e) {
     next(e);
   }

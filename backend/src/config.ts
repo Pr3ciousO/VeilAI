@@ -24,6 +24,13 @@ export const config = {
    * equivalent in its sealing key.
    */
   enclaveX25519Secret: process.env.ENCLAVE_X25519_SECRET ?? "",
+  privyAppId: process.env.PRIVY_APP_ID ?? "",
+  privyAppSecret: process.env.PRIVY_APP_SECRET ?? "",
+  /** Comma-separated origins allowed to call this API. Empty = allow all (dev). */
+  corsOrigins: (process.env.CORS_ORIGINS ?? "")
+    .split(",")
+    .map((o) => o.trim())
+    .filter(Boolean),
   supabaseUrl: process.env.SUPABASE_URL ?? "",
   supabaseServiceKey: process.env.SUPABASE_SERVICE_ROLE_KEY ?? "",
 };
