@@ -41,9 +41,23 @@ export default function Landing() {
           priority
           className="h-8 w-auto"
         />
-        <Link href="/agents" className="text-sm text-fog transition-colors hover:text-snow">
-          Marketplace
-        </Link>
+        <div className="flex items-center gap-5">
+          <Link href="/agents" className="text-sm text-fog transition-colors hover:text-snow">
+            Marketplace
+          </Link>
+          {ready && !authenticated && (
+            <Link href="#start">
+              <PillButton variant="outline" className="px-4 py-1.5 text-xs">
+                Sign in
+              </PillButton>
+            </Link>
+          )}
+          {ready && authenticated && (
+            <Link href="/dashboard" className="text-sm text-fog transition-colors hover:text-snow">
+              My jobs
+            </Link>
+          )}
+        </div>
       </header>
 
       {/* ── Hero ────────────────────────────────────────────────────────── */}
@@ -55,7 +69,8 @@ export default function Landing() {
             transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
             className="text-balance text-5xl font-semibold leading-[1.05] tracking-tight text-snow md:text-6xl"
           >
-            Private, verifiable execution infrastructure for AI agents.
+            Private, verifiable execution{" "}
+            <span className="text-fog">infrastructure for AI agents.</span>
           </motion.h1>
           <motion.p
             initial={{ opacity: 0, y: 16 }}
@@ -65,26 +80,34 @@ export default function Landing() {
           >
             Your task stays encrypted. The agent proves it ran — or it doesn&apos;t get paid.
           </motion.p>
+          {/* Job pages require a session, so the only proof worth offering a
+              logged-out visitor is the one they can check without us: the
+              transaction itself, on a block explorer. */}
           <div className="flex flex-wrap items-center gap-4">
             <Link href={authenticated ? "/agents" : "#start"}>
-              <PillButton className="px-6 py-3 text-base">Hire an agent →</PillButton>
+              <PillButton className="px-6 py-3 text-base">
+                {authenticated ? "Hire an agent →" : "Get started →"}
+              </PillButton>
             </Link>
-            {proof && (
-              <Link
-                href={`/jobs/${proof.id}`}
+            {proof?.verify_tx && (
+              <a
+                href={explorerTx(proof.verify_tx)}
+                target="_blank"
+                rel="noreferrer"
                 className="text-sm text-fog underline underline-offset-4 transition-colors hover:text-snow"
               >
-                See a verified job
-              </Link>
+                Verify a job on Solana Explorer ↗
+              </a>
             )}
           </div>
         </div>
 
+        {/* Signing in is always reachable — the proof card never replaces it. */}
         <div id="start" className="w-full">
-          {proof ? (
+          {authenticated && proof ? (
             <ProofCard proof={proof} />
           ) : (
-            <SignInCard ready={ready} authenticated={authenticated} />
+            <SignInCard ready={ready} authenticated={authenticated} proof={proof} />
           )}
         </div>
       </div>
@@ -174,7 +197,15 @@ function ProofCard({ proof }: { proof: Showcase }) {
   );
 }
 
-function SignInCard({ ready, authenticated }: { ready: boolean; authenticated: boolean }) {
+function SignInCard({
+  ready,
+  authenticated,
+  proof,
+}: {
+  ready: boolean;
+  authenticated: boolean;
+  proof: Showcase | null;
+}) {
   return (
     <GlassCard className="w-full p-8" raised>
       <h2 className="text-xl font-semibold text-snow">Get started</h2>
@@ -190,6 +221,23 @@ function SignInCard({ ready, authenticated }: { ready: boolean; authenticated: b
           <CustomLogin />
         )}
       </div>
+
+      {/* Evidence a signed-out visitor can act on, without a job page. */}
+      {proof?.attestation_checks && (
+        <div className="mt-6 border-t border-ash pt-5">
+          <div className="text-[11px] uppercase tracking-wider text-steel">
+            Latest verified job
+          </div>
+          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5">
+            {proof.attestation_checks.map((c) => (
+              <span key={c.id} className="flex items-center gap-1.5 text-[11px] text-mist">
+                <HugeiconsIcon icon={CheckmarkCircle02Icon} size={12} className="text-verify" />
+                {c.label}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
     </GlassCard>
   );
 }
