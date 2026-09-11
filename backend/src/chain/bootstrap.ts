@@ -13,8 +13,10 @@ import "dotenv/config";
 import {
   createMint,
   getOrCreateAssociatedTokenAccount,
+  getAssociatedTokenAddressSync,
   mintTo,
   getAccount,
+  getMint,
 } from "@solana/spl-token";
 import {
   edPublicFromSecret,
@@ -50,19 +52,37 @@ async function main() {
   const balance = await chain.connection.getBalance(chain.creator.publicKey);
   if (balance === 0) throw new Error("Creator wallet has no SOL — airdrop devnet SOL first");
 
-  // ─── 1. Stand-in USDC ────────────────────────────────────────────────
+  // ─── 1. Stand-in USDC the creator can actually fund ──────────────────
+  // Escrow is real: deposit_escrow moves tokens, so a creator with no balance
+  // blocks every job. We need a mint we control, not just one that exists.
   let mint = chain.usdcMint;
+  let mintUsable = false;
+
   const mintInfo = await chain.connection.getAccountInfo(mint);
-  if (!mintInfo) {
-    console.log("› configured USDC_MINT does not exist — creating a stand-in mint…");
-    mint = await createMint(
-      chain.connection,
-      chain.creator,
-      chain.creator.publicKey,
-      null,
-      6,
-    );
-    console.log(`\n  Put this in backend/.env:\n    USDC_MINT=${mint.toBase58()}\n`);
+  if (mintInfo) {
+    const info = await getMint(chain.connection, mint);
+    const isAuthority = info.mintAuthority?.equals(chain.creator.publicKey) ?? false;
+    const ata = getAssociatedTokenAddressSync(mint, chain.creator.publicKey);
+    let held = BigInt(0);
+    try {
+      held = (await getAccount(chain.connection, ata)).amount;
+    } catch {
+      /* ATA not created yet */
+    }
+    // Usable if we can mint more, or already hold enough to run the demo.
+    mintUsable = isAuthority || held >= BigInt(1_000_000);
+    if (!mintUsable) {
+      console.log(
+        `! USDC_MINT ${mint.toBase58()} is not mintable by the creator ` +
+          `(authority ${info.mintAuthority?.toBase58() ?? "none"}) and the balance is ` +
+          `${Number(held) / 1e6} — creating a stand-in mint instead.`,
+      );
+    }
+  }
+
+  if (!mintUsable) {
+    mint = await createMint(chain.connection, chain.creator, chain.creator.publicKey, null, 6);
+    console.log(`\n  ⚠ Put this in backend/.env and re-run bootstrap:\n    USDC_MINT=${mint.toBase58()}\n`);
   }
 
   const creatorAta = await getOrCreateAssociatedTokenAccount(
@@ -80,21 +100,50 @@ async function main() {
 
   const held = (await getAccount(chain.connection, creatorAta.address)).amount;
   if (held < BigInt(1_000_000)) {
-    try {
-      await mintTo(chain.connection, chain.creator, mint, creatorAta.address, chain.creator, MINT_AMOUNT);
-      console.log(`✓ minted ${MINT_AMOUNT / 1e6} stand-in USDC to creator`);
-    } catch {
-      console.log("! could not mint — creator is not the mint authority; fund the ATA manually");
-    }
+    await mintTo(
+      chain.connection,
+      chain.creator,
+      mint,
+      creatorAta.address,
+      chain.creator,
+      MINT_AMOUNT,
+    );
+    console.log(`✓ minted ${MINT_AMOUNT / 1e6} stand-in USDC to creator`);
   } else {
     console.log(`✓ creator holds ${Number(held) / 1e6} USDC`);
   }
 
-  // ─── 2. Seed one agent so the marketplace isn't empty ────────────────
+  if (!mint.equals(chain.usdcMint)) {
+    console.error(
+      "\n✗ USDC_MINT in .env still points at the old mint. Update it to the address above,\n" +
+        "  then re-run bootstrap — escrow will fail until it matches.\n",
+    );
+    process.exit(1);
+  }
+
+  // ─── 2. Retire listings that predate agent_id / config binding ───────
+  // Their PDAs were derived under the old seed and their accounts use the old
+  // layout, so create_job fails its seeds constraint. Counting rows isn't the
+  // test — a stale row is worse than no row, because it looks selectable.
+  const { data: stale } = await db()
+    .from("agents")
+    .select("id, name")
+    .is("agent_id", null);
+  if (stale?.length) {
+    for (const a of stale) {
+      await db().from("agents").delete().eq("id", a.id);
+      console.log(`✗ removed stale listing "${a.name}" (registered before agent_id existed)`);
+    }
+  }
+
+  // ─── 3. Seed one agent so the marketplace isn't empty ────────────────
   // Further agents are listed through the app; this is just a starting listing.
-  const { count } = await db().from("agents").select("id", { count: "exact", head: true });
+  const { count } = await db()
+    .from("agents")
+    .select("id", { count: "exact", head: true })
+    .not("agent_id", "is", null);
   if (count && count > 0) {
-    console.log(`✓ ${count} agent(s) already listed — skipping seed agent`);
+    console.log(`✓ ${count} usable agent(s) already listed — skipping seed agent`);
     console.log("\nBootstrap complete.");
     return;
   }
