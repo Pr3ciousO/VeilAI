@@ -171,6 +171,11 @@
                 "kind": "account",
                 "path": "agent.authority",
                 "account": "Agent"
+              },
+              {
+                "kind": "account",
+                "path": "agent.agent_id",
+                "account": "Agent"
               }
             ]
           }
@@ -1025,6 +1030,11 @@
                 "kind": "account",
                 "path": "agent.authority",
                 "account": "Agent"
+              },
+              {
+                "kind": "account",
+                "path": "agent.agent_id",
+                "account": "Agent"
               }
             ]
           }
@@ -1254,8 +1264,9 @@
     {
       "name": "register_agent",
       "docs": [
-        "Register an AI provider/agent with its allowlisted enclave measurement,",
-        "quoting key, model id, and price."
+        "Register an AI agent with its allowlisted enclave measurement, quoting",
+        "key, model id, config commitment, and price. `agent_id` is unique per",
+        "authority, so one operator can list many agents."
       ],
       "discriminator": [
         135,
@@ -1286,6 +1297,10 @@
               {
                 "kind": "account",
                 "path": "authority"
+              },
+              {
+                "kind": "arg",
+                "path": "agent_id"
               }
             ]
           }
@@ -1302,8 +1317,21 @@
       ],
       "args": [
         {
+          "name": "agent_id",
+          "type": "u64"
+        },
+        {
           "name": "model_id",
           "type": "string"
+        },
+        {
+          "name": "config_commitment",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
         },
         {
           "name": "expected_measurement",
@@ -1502,6 +1530,11 @@
               {
                 "kind": "account",
                 "path": "agent.authority",
+                "account": "Agent"
+              },
+              {
+                "kind": "account",
+                "path": "agent.agent_id",
                 "account": "Agent"
               }
             ]
@@ -1962,7 +1995,8 @@
     {
       "name": "Agent",
       "docs": [
-        "A registered AI provider/agent. One agent per provider wallet in the MVP."
+        "A registered AI agent. An authority may register many agents, distinguished",
+        "by `agent_id` — a marketplace operator holds one wallet and many listings."
       ],
       "type": {
         "kind": "struct",
@@ -1972,11 +2006,35 @@
             "type": "pubkey"
           },
           {
+            "name": "agent_id",
+            "docs": [
+              "Unique per authority; part of the PDA seed."
+            ],
+            "type": "u64"
+          },
+          {
             "name": "model_id",
             "docs": [
               "Model identifier used when recomputing the attestation report data."
             ],
             "type": "string"
+          },
+          {
+            "name": "config_commitment",
+            "docs": [
+              "sha256 over the agent's definition (system prompt ‖ model ‖ params).",
+              "",
+              "Bound into every job's `input_commitment`, so an attestation proves which",
+              "agent definition ran — not merely that *some* enclave ran. Pinning it",
+              "here makes a silently edited agent detectable: the commitment a client",
+              "used is checkable against the one the agent advertises."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
           },
           {
             "name": "expected_measurement",

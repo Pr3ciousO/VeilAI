@@ -39,6 +39,8 @@ function loadKeypair(path: string): Keypair {
 }
 
 const AGENT_SEED = Buffer.from("agent");
+// Unique per authority — one wallet can list many agents.
+const AGENT_ID = new anchor.BN(Math.floor(Math.random() * 1_000_000_000));
 const JOB_SEED = Buffer.from("job");
 const ESCROW_AUTH_SEED = Buffer.from("escrow-auth");
 const MODEL_ID = "claude-haiku-4-5";
@@ -66,9 +68,10 @@ async function main() {
   // Real ed25519 quoting key + measurement.
   const quoting = nacl.sign.keyPair();
   const measurement = crypto.randomBytes(48);
+  const configCommitment = crypto.randomBytes(32);
 
   const agentPda = PublicKey.findProgramAddressSync(
-    [AGENT_SEED, providerKp.publicKey.toBuffer()],
+    [AGENT_SEED, providerKp.publicKey.toBuffer(), AGENT_ID.toArrayLike(Buffer, "le", 8)],
     program.programId,
   )[0];
 
@@ -76,7 +79,7 @@ async function main() {
   log("register_agent…");
   try {
     await program.methods
-      .registerAgent(MODEL_ID, Array.from(measurement), Array.from(quoting.publicKey), new anchor.BN(30_000))
+      .registerAgent(AGENT_ID, MODEL_ID, Array.from(configCommitment), Array.from(measurement), Array.from(quoting.publicKey), new anchor.BN(30_000))
       .accountsPartial({ authority: providerKp.publicKey })
       .signers([providerKp])
       .rpc();

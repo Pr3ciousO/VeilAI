@@ -33,10 +33,13 @@ describe("veilai — phase 4 (settlement)", () => {
   const providerKp = Keypair.generate();
   const quoting = nacl.sign.keyPair();
   const measurement = crypto.randomBytes(48);
+  const configCommitment = crypto.randomBytes(32);
   const modelId = "claude-haiku-4-5";
   const budget = new anchor.BN(50_000);
 
   const AGENT_SEED = Buffer.from("agent");
+  // Unique per authority — one wallet can list many agents.
+  const AGENT_ID = new anchor.BN(Math.floor(Math.random() * 1_000_000_000));
   const JOB_SEED = Buffer.from("job");
   const ESCROW_AUTH_SEED = Buffer.from("escrow-auth");
 
@@ -45,7 +48,7 @@ describe("veilai — phase 4 (settlement)", () => {
   let providerAta: PublicKey;
 
   const agentPda = PublicKey.findProgramAddressSync(
-    [AGENT_SEED, providerKp.publicKey.toBuffer()],
+    [AGENT_SEED, providerKp.publicKey.toBuffer(), AGENT_ID.toArrayLike(Buffer, "le", 8)],
     program.programId,
   )[0];
 
@@ -59,7 +62,7 @@ describe("veilai — phase 4 (settlement)", () => {
     await mintTo(connection, creator, usdcMint, creatorAta, creator, 1_000_000);
 
     await program.methods
-      .registerAgent(modelId, Array.from(measurement), Array.from(quoting.publicKey), new anchor.BN(30_000))
+      .registerAgent(AGENT_ID, modelId, Array.from(configCommitment), Array.from(measurement), Array.from(quoting.publicKey), new anchor.BN(30_000))
       .accountsPartial({ authority: providerKp.publicKey })
       .signers([providerKp])
       .rpc();

@@ -10,17 +10,23 @@
  * Run: pnpm --filter @veilai/backend chain:bootstrap
  */
 import "dotenv/config";
-import * as anchor from "@coral-xyz/anchor";
-import { PublicKey } from "@solana/web3.js";
 import {
   createMint,
   getOrCreateAssociatedTokenAccount,
   mintTo,
   getAccount,
 } from "@solana/spl-token";
-import { edPublicFromSecret, hexToBytes } from "@veilai/shared";
-import bs58 from "bs58";
+import {
+  edPublicFromSecret,
+  hexToBytes,
+  commitAgentConfig,
+  newAgentId,
+  sealTo,
+  type AgentConfig,
+} from "@veilai/shared";
 import { getChain, chainEnabled, explorer } from "./client.js";
+import { registerAgentOnChain } from "./lifecycle.js";
+import { enclavePublicKey } from "../enclave/key.js";
 import { config } from "../config.js";
 import { db } from "../db/client.js";
 
@@ -84,61 +90,65 @@ async function main() {
     console.log(`✓ creator holds ${Number(held) / 1e6} USDC`);
   }
 
-  // ─── 2. Register the agent with the running enclave's identity ───────
-  const quotingKeyB58 = edPublicFromSecret(hexToBytes(config.enclaveQuotingSecret));
-  const quotingKey = Array.from(bs58.decode(quotingKeyB58));
-  const measurement = Array.from(hexToBytes(config.enclaveMeasurement));
-  const modelId = process.env.AGENT_MODEL_ID ?? "claude-opus-4-8";
-  const price = Number(process.env.AGENT_PRICE ?? 30_000);
-  const agentPda = chain.agentPda(chain.provider.publicKey);
-
-  const existing = await chain.connection.getAccountInfo(agentPda);
-  if (existing) {
-    const agent = await chain.program.account.agent.fetch(agentPda);
-    const onChainKey = bs58.encode(Buffer.from(agent.quotingKey));
-    const onChainMrtd = Buffer.from(agent.expectedMeasurement).toString("hex");
-    const keyMatches = onChainKey === quotingKeyB58;
-    const mrtdMatches = onChainMrtd === config.enclaveMeasurement.toLowerCase();
-    if (keyMatches && mrtdMatches) {
-      console.log("✓ agent already registered and matches this enclave");
-    } else {
-      // register_agent uses `init`, so a mismatched agent cannot be updated —
-      // it would verify every honest job as Rejected. Fail loudly.
-      console.error("\n✗ On-chain agent does NOT match the running enclave:");
-      if (!keyMatches) console.error(`    quoting key  on-chain ${onChainKey}\n                 enclave  ${quotingKeyB58}`);
-      if (!mrtdMatches) console.error(`    measurement  on-chain ${onChainMrtd}\n                 enclave  ${config.enclaveMeasurement}`);
-      console.error(
-        "\n  Every attestation will be rejected. Either point ENCLAVE_QUOTING_SECRET/" +
-          "ENCLAVE_MEASUREMENT at the registered values, or use a fresh provider keypair.\n",
-      );
-      process.exit(1);
-    }
-  } else {
-    const sig = await chain.program.methods
-      .registerAgent(modelId, measurement, quotingKey, new anchor.BN(price))
-      .accountsPartial({ authority: chain.provider.publicKey })
-      .signers([chain.provider])
-      .rpc();
-    console.log(`✓ agent registered — ${explorer("tx", sig)}`);
+  // ─── 2. Seed one agent so the marketplace isn't empty ────────────────
+  // Further agents are listed through the app; this is just a starting listing.
+  const { count } = await db().from("agents").select("id", { count: "exact", head: true });
+  if (count && count > 0) {
+    console.log(`✓ ${count} agent(s) already listed — skipping seed agent`);
+    console.log("\nBootstrap complete.");
+    return;
   }
 
-  // ─── 3. Mirror into Supabase so /agents lists the real on-chain agent ─
-  const { error } = await db()
-    .from("agents")
-    .upsert({
-      id: agentPda.toBase58(),
-      authority: chain.provider.publicKey.toBase58(),
-      name: process.env.AGENT_NAME ?? "ResearchBot",
-      description: "Research & document analysis — summarization, extraction, classification.",
-      model_id: modelId,
-      expected_measurement: config.enclaveMeasurement,
-      quoting_key: quotingKeyB58,
-      price,
-      capabilities: ["research", "summarization", "extraction", "classification"],
-    });
+  const systemPrompt =
+    process.env.AGENT_SYSTEM_PROMPT ??
+    "You are a meticulous research analyst. Given a document or question, produce a " +
+      "structured, factual answer: lead with the direct conclusion, support it with " +
+      "specifics drawn only from the material provided, and state plainly when the " +
+      "material is insufficient rather than speculating.";
+  const modelId = process.env.AGENT_MODEL_ID ?? "claude-opus-4-8";
+  const price = Number(process.env.AGENT_PRICE ?? 30_000);
+  const agentConfig: AgentConfig = {
+    systemPrompt,
+    modelId,
+    temperature: 1,
+    maxTokens: 4096,
+  };
+  const configCommitment = commitAgentConfig(agentConfig);
+  const quotingKeyB58 = edPublicFromSecret(hexToBytes(config.enclaveQuotingSecret));
+  const agentId = newAgentId();
+
+  const onChain = await registerAgentOnChain({
+    agentId,
+    modelId,
+    configCommitment,
+    measurement: config.enclaveMeasurement,
+    quotingKeyB58,
+    price,
+  });
+  console.log(`✓ agent registered — ${explorer("tx", onChain.signature)}`);
+
+  const sealedPrompt = await sealTo(enclavePublicKey(), new TextEncoder().encode(systemPrompt));
+
+  const { error } = await db().from("agents").insert({
+    id: onChain.agentPda,
+    authority: onChain.authority,
+    agent_id: agentId,
+    name: process.env.AGENT_NAME ?? "ResearchBot",
+    description: "Research & document analysis — summarization, extraction, classification.",
+    model_id: modelId,
+    config_commitment: configCommitment,
+    system_prompt_ciphertext: sealedPrompt,
+    temperature: 1,
+    max_tokens: 4096,
+    expected_measurement: config.enclaveMeasurement,
+    quoting_key: quotingKeyB58,
+    price,
+    capabilities: ["research", "summarization", "extraction", "classification"],
+    register_tx: onChain.signature,
+  });
   if (error) throw error;
 
-  console.log(`✓ agent mirrored to Supabase — ${explorer("address", agentPda.toBase58())}`);
+  console.log(`✓ agent mirrored to Supabase — ${explorer("address", onChain.agentPda)}`);
   console.log("\nBootstrap complete. Jobs created from the app will now hit the chain.");
 }
 

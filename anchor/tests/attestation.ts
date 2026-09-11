@@ -27,6 +27,8 @@ describe("veilai — phase 3 (attestation verification)", () => {
   const authority = wallet.payer; // provider (agent authority) == creator here
 
   const AGENT_SEED = Buffer.from("agent");
+  // Unique per authority — one wallet can list many agents.
+  const AGENT_ID = new anchor.BN(Math.floor(Math.random() * 1_000_000_000));
   const JOB_SEED = Buffer.from("job");
   const ESCROW_AUTH_SEED = Buffer.from("escrow-auth");
 
@@ -34,12 +36,13 @@ describe("veilai — phase 3 (attestation verification)", () => {
   // Real ed25519 quoting keypair (stands in for the TEE quoting key).
   const quoting = nacl.sign.keyPair();
   const measurement = crypto.randomBytes(48);
+  const configCommitment = crypto.randomBytes(32);
 
   let usdcMint: PublicKey;
   let creatorAta: PublicKey;
 
   const agentPda = PublicKey.findProgramAddressSync(
-    [AGENT_SEED, authority.publicKey.toBuffer()],
+    [AGENT_SEED, authority.publicKey.toBuffer(), AGENT_ID.toArrayLike(Buffer, "le", 8)],
     program.programId,
   )[0];
 
@@ -52,7 +55,9 @@ describe("veilai — phase 3 (attestation verification)", () => {
     // Register the agent with the real quoting key + measurement.
     await program.methods
       .registerAgent(
+        AGENT_ID,
         modelId,
+        Array.from(configCommitment),
         Array.from(measurement),
         Array.from(quoting.publicKey),
         new anchor.BN(30_000),

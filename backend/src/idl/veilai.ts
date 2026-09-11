@@ -177,6 +177,11 @@ export type Veilai = {
                 "kind": "account",
                 "path": "agent.authority",
                 "account": "agent"
+              },
+              {
+                "kind": "account",
+                "path": "agent.agent_id",
+                "account": "agent"
               }
             ]
           }
@@ -1031,6 +1036,11 @@ export type Veilai = {
                 "kind": "account",
                 "path": "agent.authority",
                 "account": "agent"
+              },
+              {
+                "kind": "account",
+                "path": "agent.agent_id",
+                "account": "agent"
               }
             ]
           }
@@ -1260,8 +1270,9 @@ export type Veilai = {
     {
       "name": "registerAgent",
       "docs": [
-        "Register an AI provider/agent with its allowlisted enclave measurement,",
-        "quoting key, model id, and price."
+        "Register an AI agent with its allowlisted enclave measurement, quoting",
+        "key, model id, config commitment, and price. `agent_id` is unique per",
+        "authority, so one operator can list many agents."
       ],
       "discriminator": [
         135,
@@ -1292,6 +1303,10 @@ export type Veilai = {
               {
                 "kind": "account",
                 "path": "authority"
+              },
+              {
+                "kind": "arg",
+                "path": "agentId"
               }
             ]
           }
@@ -1308,8 +1323,21 @@ export type Veilai = {
       ],
       "args": [
         {
+          "name": "agentId",
+          "type": "u64"
+        },
+        {
           "name": "modelId",
           "type": "string"
+        },
+        {
+          "name": "configCommitment",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
         },
         {
           "name": "expectedMeasurement",
@@ -1508,6 +1536,11 @@ export type Veilai = {
               {
                 "kind": "account",
                 "path": "agent.authority",
+                "account": "agent"
+              },
+              {
+                "kind": "account",
+                "path": "agent.agent_id",
                 "account": "agent"
               }
             ]
@@ -1968,7 +2001,8 @@ export type Veilai = {
     {
       "name": "agent",
       "docs": [
-        "A registered AI provider/agent. One agent per provider wallet in the MVP."
+        "A registered AI agent. An authority may register many agents, distinguished",
+        "by `agent_id` — a marketplace operator holds one wallet and many listings."
       ],
       "type": {
         "kind": "struct",
@@ -1978,11 +2012,35 @@ export type Veilai = {
             "type": "pubkey"
           },
           {
+            "name": "agentId",
+            "docs": [
+              "Unique per authority; part of the PDA seed."
+            ],
+            "type": "u64"
+          },
+          {
             "name": "modelId",
             "docs": [
               "Model identifier used when recomputing the attestation report data."
             ],
             "type": "string"
+          },
+          {
+            "name": "configCommitment",
+            "docs": [
+              "sha256 over the agent's definition (system prompt ‖ model ‖ params).",
+              "",
+              "Bound into every job's `input_commitment`, so an attestation proves which",
+              "agent definition ran — not merely that *some* enclave ran. Pinning it",
+              "here makes a silently edited agent detectable: the commitment a client",
+              "used is checkable against the one the agent advertises."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
           },
           {
             "name": "expectedMeasurement",

@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { AppNav } from "@/components/AppNav";
-import { GlassCard, Badge } from "@/components/ui";
+import { GlassCard, Badge, PillButton } from "@/components/ui";
 import { api, type Agent } from "@/lib/api";
 import { usdc, short } from "@/lib/format";
 
@@ -18,8 +19,17 @@ export default function Agents() {
     <>
       <AppNav />
       <main className="mx-auto w-full max-w-6xl flex-1 px-6 py-10">
-        <h1 className="text-3xl font-semibold tracking-tight text-snow">Agents</h1>
-        <p className="mt-1 text-sm text-fog">Registered providers and their allowlisted enclave measurements.</p>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-semibold tracking-tight text-snow">Agents</h1>
+            <p className="mt-1 text-sm text-fog">
+              Registered agents and their allowlisted enclave measurements.
+            </p>
+          </div>
+          <Link href="/agents/new">
+            <PillButton>List an agent</PillButton>
+          </Link>
+        </div>
 
         {err && <p className="mt-6 text-sm text-reject">{err}</p>}
 
@@ -44,6 +54,16 @@ export default function Agents() {
                 <div className="rounded-2xl bg-carbon/60 p-3">
                   <div className="text-[11px] uppercase tracking-wider text-steel">Enclave measurement (MRTD)</div>
                   <div className="mt-1 font-mono text-xs text-mist">{short(a.expected_measurement, 10)}</div>
+                  {a.config_commitment && (
+                    <>
+                      <div className="mt-3 text-[11px] uppercase tracking-wider text-steel">
+                        Definition commitment
+                      </div>
+                      <div className="mt-1 font-mono text-xs text-mist">
+                        {short(a.config_commitment, 10)}
+                      </div>
+                    </>
+                  )}
                 </div>
               </GlassCard>
             );

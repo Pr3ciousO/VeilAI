@@ -25,6 +25,8 @@ describe("veilai — phase 1 (job lifecycle)", () => {
   const providerKp = Keypair.generate();
 
   const AGENT_SEED = Buffer.from("agent");
+  // Unique per authority — one wallet can list many agents.
+  const AGENT_ID = new anchor.BN(Math.floor(Math.random() * 1_000_000_000));
   const JOB_SEED = Buffer.from("job");
   const ESCROW_AUTH_SEED = Buffer.from("escrow-auth");
 
@@ -33,6 +35,8 @@ describe("veilai — phase 1 (job lifecycle)", () => {
 
   const modelId = "claude-haiku-4-5";
   const measurement = Array.from(crypto.randomBytes(48));
+  // Commitment to the agent's definition (system prompt ‖ model ‖ params).
+  const configCommitment = Array.from(crypto.randomBytes(32));
   const quotingKey = Array.from(crypto.randomBytes(32));
   const price = new anchor.BN(30_000);
 
@@ -43,7 +47,7 @@ describe("veilai — phase 1 (job lifecycle)", () => {
   const nonce = Array.from(crypto.randomBytes(32));
 
   const agentPda = PublicKey.findProgramAddressSync(
-    [AGENT_SEED, providerKp.publicKey.toBuffer()],
+    [AGENT_SEED, providerKp.publicKey.toBuffer(), AGENT_ID.toArrayLike(Buffer, "le", 8)],
     program.programId,
   )[0];
   const jobPda = PublicKey.findProgramAddressSync(
@@ -67,7 +71,7 @@ describe("veilai — phase 1 (job lifecycle)", () => {
 
   it("registers an agent", async () => {
     await program.methods
-      .registerAgent(modelId, measurement, quotingKey, price)
+      .registerAgent(AGENT_ID, modelId, configCommitment, measurement, quotingKey, price)
       .accountsPartial({ authority: providerKp.publicKey })
       .signers([providerKp])
       .rpc();
