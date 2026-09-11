@@ -18,7 +18,7 @@ export const metadata: Metadata = {
         : "http://localhost:3000"),
   ),
   title: {
-    default: "VeilAI — Private, verifiable execution infrastructure for AI agents",
+    default: "VeilAI | Private, verifiable execution infrastructure for AI agents",
     // Child routes set only their own name; the brand is appended here.
     template: "%s — VeilAI",
   },
