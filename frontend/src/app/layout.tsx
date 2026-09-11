@@ -10,9 +10,25 @@ const spaceGrotesk = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: "VeilAI — Private, verifiable execution for AI agents",
+  // Absolute URLs are required for social cards; Vercel supplies the host.
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_SITE_URL ??
+      (process.env.VERCEL_PROJECT_PRODUCTION_URL
+        ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+        : "http://localhost:3000"),
+  ),
+  title: {
+    default: "VeilAI — Private, verifiable execution infrastructure for AI agents",
+    // Child routes set only their own name; the brand is appended here.
+    template: "%s — VeilAI",
+  },
   description:
-    "Sensitive jobs run through MagicBlock Private Ephemeral Rollups; providers must prove execution before they get paid.",
+    "Your task stays encrypted. The agent proves it ran — or it doesn't get paid.",
+  openGraph: {
+    siteName: "VeilAI",
+    type: "website",
+  },
+  twitter: { card: "summary_large_image" },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
