@@ -2,21 +2,44 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { usePrivy } from "@privy-io/react-auth";
 import { AppNav } from "@/components/AppNav";
 import { GlassCard, PillButton, StatusChip, Badge } from "@/components/ui";
 import { api, type Job } from "@/lib/api";
 import { usdc } from "@/lib/format";
 
 export default function Dashboard() {
+  const { user, authenticated, ready } = usePrivy();
+  const router = useRouter();
   const [jobs, setJobs] = useState<Job[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
+  // "My jobs" means this user's jobs — an unfiltered fetch showed everyone's.
   useEffect(() => {
+    if (!ready) return;
+    if (!authenticated) {
+      router.replace("/");
+      return;
+    }
+    if (!user?.id) return;
     api
-      .jobs()
+      .jobs(user.id)
       .then((r) => setJobs(r.jobs))
       .catch((e) => setErr(e.message));
-  }, []);
+  }, [ready, authenticated, user?.id, router]);
+
+  if (!ready || !authenticated) {
+    return (
+      <>
+        <AppNav />
+        <main className="mx-auto w-full max-w-6xl flex-1 px-6 py-10">
+          <div className="h-8 w-48 animate-pulse rounded-pill bg-carbon" />
+          <div className="mt-8 h-64 animate-pulse rounded-3xl bg-carbon/60" />
+        </main>
+      </>
+    );
+  }
 
   return (
     <>

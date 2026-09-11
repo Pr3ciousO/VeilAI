@@ -42,6 +42,28 @@ jobsRouter.get("/enclave/pubkey", (_req, res) => {
   res.json({ x25519PublicKey: enclavePublicKey() });
 });
 
+/**
+ * Public proof of life for the landing page: the most recent verified job,
+ * reduced to its verification evidence. Deliberately excludes title, creator
+ * and agent — an unauthenticated visitor should learn that verification
+ * happened, not who asked for what.
+ */
+jobsRouter.get("/showcase", async (_req, res, next) => {
+  try {
+    const { data, error } = await db()
+      .from("jobs")
+      .select("id, status, attestation_checks, verify_tx, output_commitment")
+      .eq("status", "Settled")
+      .not("verify_tx", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(1);
+    if (error) throw error;
+    res.json({ job: data?.[0] ?? null });
+  } catch (e) {
+    next(e);
+  }
+});
+
 jobsRouter.get("/", async (req, res, next) => {
   try {
     let q = db().from("jobs").select("*").order("created_at", { ascending: false });

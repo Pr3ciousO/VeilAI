@@ -127,6 +127,17 @@ export const api = {
   jobs: (creator?: string) =>
     req<{ jobs: Job[] }>(`/jobs${creator ? `?creator=${creator}` : ""}`),
   job: (id: string) => req<{ job: Job }>(`/jobs/${id}`),
+  /** Verification evidence only — safe for logged-out visitors. */
+  showcase: () =>
+    req<{
+      job: {
+        id: string;
+        status: string;
+        attestation_checks: AttestationCheckDTO[] | null;
+        verify_tx: string | null;
+        output_commitment: string | null;
+      } | null;
+    }>("/jobs/showcase"),
   jobsCreate: (body: CreateJobBody) =>
     req<{ job: Job }>("/jobs", { method: "POST", body: JSON.stringify(body) }),
   enclavePubkey: () => req<{ x25519PublicKey: string }>("/jobs/enclave/pubkey"),
