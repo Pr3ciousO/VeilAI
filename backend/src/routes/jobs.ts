@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { db } from "../db/client.js";
-import { JobStatus, AttestationStatus, verifyQuote, type SealedBox } from "@veilai/shared";
+import { JobStatus, AttestationStatus, verifyQuoteDetailed, type SealedBox } from "@veilai/shared";
 import { enclaveFromEnv } from "../enclave/stub.js";
 import { newX25519Keypair } from "@veilai/shared";
 
@@ -113,7 +113,7 @@ jobsRouter.post("/:id/execute", async (req, res, next) => {
     });
 
     // Off-chain mirror of the on-chain verifier's checks (authoritative check is on-chain).
-    const check = verifyQuote(out.quote, {
+    const check = verifyQuoteDetailed(out.quote, {
       inputCommitment: out.inputCommitment,
       outputCommitment: out.outputCommitment,
       modelId: job.model_id ?? "claude-opus-4-8",
@@ -131,6 +131,8 @@ jobsRouter.post("/:id/execute", async (req, res, next) => {
         // Recorded so a viewer can tell "sealed to a key I don't hold" apart
         // from "decryption failed" without attempting a doomed decrypt.
         output_recipient_pubkey: userPublicKeyB58,
+        attestation_checks: check.checks,
+        attestation_quote: out.quote,
         attestation_status: verified ? AttestationStatus.Verified : AttestationStatus.Rejected,
         status: verified ? JobStatus.Verified : JobStatus.Rejected,
       })
@@ -147,7 +149,9 @@ jobsRouter.get("/:id/result", async (req, res, next) => {
   try {
     const { data, error } = await db()
       .from("jobs")
-      .select("id, status, output_commitment, output_ciphertext, output_recipient_pubkey")
+      .select(
+        "id, status, output_commitment, output_ciphertext, output_recipient_pubkey, attestation_checks, attestation_quote",
+      )
       .eq("id", req.params.id)
       .single();
     if (error) throw error;

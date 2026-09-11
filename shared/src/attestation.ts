@@ -44,36 +44,119 @@ export function quoteSignedMessage(quote: AttestationQuote): string {
   return computeSignedMessage(quote.reportData, quote.mrtd);
 }
 
+export type AttestationCheckId = "quoting_key" | "measurement" | "report_data" | "signature";
+
+export interface AttestationCheck {
+  id: AttestationCheckId;
+  /** Short label for display. */
+  label: string;
+  ok: boolean;
+  /** The value the verifier required. */
+  expected: string;
+  /** The value the quote actually carried. */
+  actual: string;
+  /** The cheat this check makes impossible — the reason it exists. */
+  guards: string;
+  /** On-chain reason string emitted when this check is the one that fails. */
+  reason: string;
+}
+
+export interface AttestationReport {
+  ok: boolean;
+  /** Reason from the first failing check, in on-chain precedence order. */
+  reason?: string;
+  checks: AttestationCheck[];
+}
+
+export interface AttestationExpectation {
+  inputCommitment: string;
+  outputCommitment: string;
+  modelId: string;
+  nonce: string;
+  allowlistedQuotingKey: string;
+  expectedMeasurement: string;
+}
+
 /**
- * Off-chain mirror of the on-chain verifier's four checks. Useful for backend
- * pre-flight and tests; the authoritative check runs in the program.
+ * Off-chain mirror of the on-chain verifier, reporting each check separately
+ * rather than short-circuiting — so a client can show which specific guarantee
+ * failed. Check order and reason strings match `verify_attestation`'s
+ * precedence; the authoritative check still runs in the program.
  */
-export function verifyQuote(
+export function verifyQuoteDetailed(
   quote: AttestationQuote,
-  expected: {
-    inputCommitment: string;
-    outputCommitment: string;
-    modelId: string;
-    nonce: string;
-    allowlistedQuotingKey: string;
-    expectedMeasurement: string;
-  },
-): { ok: boolean; reason?: string } {
+  expected: AttestationExpectation,
+): AttestationReport {
   const recomputed = computeReportData({
     inputCommitment: expected.inputCommitment,
     outputCommitment: expected.outputCommitment,
     modelId: expected.modelId,
     nonce: expected.nonce,
   });
-  if (recomputed !== quote.reportData) return { ok: false, reason: "report_data mismatch" };
-  if (quote.quotingKey !== expected.allowlistedQuotingKey)
-    return { ok: false, reason: "quoting key not allowlisted" };
-  if (quote.mrtd.toLowerCase() !== expected.expectedMeasurement.toLowerCase())
-    return { ok: false, reason: "measurement not allowlisted" };
   const signedMessage = computeSignedMessage(quote.reportData, quote.mrtd);
-  const sigOk = edVerify(quote.quotingKey, hexToBytes(quote.signature), hexToBytes(signedMessage));
-  if (!sigOk) return { ok: false, reason: "invalid signature" };
-  return { ok: true };
+
+  // Signature validity is only meaningful against the key the quote claims;
+  // `quoting_key` above is what ties that key to the registered agent.
+  let sigOk = false;
+  try {
+    sigOk = edVerify(quote.quotingKey, hexToBytes(quote.signature), hexToBytes(signedMessage));
+  } catch {
+    sigOk = false; // malformed key/signature encoding is a failed check, not a crash
+  }
+
+  const checks: AttestationCheck[] = [
+    {
+      id: "quoting_key",
+      label: "Quoting key allowlisted",
+      ok: quote.quotingKey === expected.allowlistedQuotingKey,
+      expected: expected.allowlistedQuotingKey,
+      actual: quote.quotingKey,
+      guards: "Signing from any enclave other than the one this agent registered.",
+      reason: "quoting key not allowlisted",
+    },
+    {
+      id: "measurement",
+      label: "Measurement (MRTD) matches",
+      ok: quote.mrtd.toLowerCase() === expected.expectedMeasurement.toLowerCase(),
+      expected: expected.expectedMeasurement,
+      actual: quote.mrtd,
+      guards: "Running modified code inside a genuine TEE.",
+      reason: "measurement not allowlisted",
+    },
+    {
+      id: "report_data",
+      label: "Report data binds this job",
+      ok: recomputed === quote.reportData,
+      expected: recomputed,
+      actual: quote.reportData,
+      guards: "Swapping the output, the model, or replaying another job's quote.",
+      reason: "report_data mismatch",
+    },
+    {
+      id: "signature",
+      label: "Ed25519 signature valid",
+      ok: sigOk,
+      expected: signedMessage,
+      actual: quote.signature,
+      guards: "Forging an attestation without the enclave's private key.",
+      reason: "invalid signature",
+    },
+  ];
+
+  const failed = checks.find((c) => !c.ok);
+  return { ok: !failed, reason: failed?.reason, checks };
+}
+
+/**
+ * Pass/fail summary of {@link verifyQuoteDetailed}, for callers that only need
+ * the verdict.
+ */
+export function verifyQuote(
+  quote: AttestationQuote,
+  expected: AttestationExpectation,
+): { ok: boolean; reason?: string } {
+  const { ok, reason } = verifyQuoteDetailed(quote, expected);
+  return ok ? { ok } : { ok, reason };
 }
 
 export { bs58 };

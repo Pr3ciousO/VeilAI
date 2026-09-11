@@ -45,6 +45,19 @@ export interface Job {
   nonce: string;
   settled: boolean;
   created_at: string;
+  /** Per-check verifier results; null until the job has been executed. */
+  attestation_checks: AttestationCheckDTO[] | null;
+  model_id: string | null;
+}
+
+export interface AttestationCheckDTO {
+  id: "quoting_key" | "measurement" | "report_data" | "signature";
+  label: string;
+  ok: boolean;
+  expected: string;
+  actual: string;
+  guards: string;
+  reason: string;
 }
 
 export interface SealedBoxDTO {

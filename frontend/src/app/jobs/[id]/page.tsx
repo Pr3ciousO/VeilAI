@@ -3,7 +3,7 @@
 import { use, useEffect, useState } from "react";
 import { AppNav } from "@/components/AppNav";
 import { GlassCard, PillButton, StatusChip, Badge } from "@/components/ui";
-import { api, type Job } from "@/lib/api";
+import { api, type Job, type AttestationCheckDTO } from "@/lib/api";
 import { usdc, short } from "@/lib/format";
 import { getUserKey, openResult } from "@/lib/userkey";
 import { motion, AnimatePresence } from "framer-motion";
@@ -82,6 +82,8 @@ export default function JobDetail({ params }: PageProps<"/jobs/[id]">) {
 
   const verified = job.status === "Verified" || job.status === "Settled";
   const rejected = job.status === "Rejected";
+  const checks = job.attestation_checks ?? [];
+  const failedCheck = checks.find((c) => !c.ok);
 
   return (
     <>
@@ -142,11 +144,28 @@ export default function JobDetail({ params }: PageProps<"/jobs/[id]">) {
                     </div>
                     <div className="text-xs text-fog">
                       {verified
-                        ? "Ed25519 quote valid · MRTD matches the agent allowlist"
-                        : "Attestation failed on-chain — escrow refunded"}
+                        ? "All four on-chain checks passed"
+                        : `Rejected on-chain — ${failedCheck?.reason ?? "attestation invalid"} · escrow refunded`}
                     </div>
                   </div>
                 </div>
+
+                {/* The four checks `verify_attestation` runs, shown individually —
+                    a single "verified" line hides which guarantee actually held. */}
+                {checks.length > 0 && (
+                  <div className="mt-5 flex flex-col gap-2">
+                    {checks.map((c, i) => (
+                      <motion.div
+                        key={c.id}
+                        initial={{ opacity: 0, x: -6 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: 0.12 * i, duration: 0.3 }}
+                      >
+                        <CheckRow check={c} />
+                      </motion.div>
+                    ))}
+                  </div>
+                )}
                 {job.output_commitment && (
                   <div className="mt-4 rounded-2xl bg-carbon/60 p-3">
                     <div className="text-[11px] uppercase tracking-wider text-steel">Result commitment</div>
@@ -203,6 +222,80 @@ export default function JobDetail({ params }: PageProps<"/jobs/[id]">) {
         {err && <p className="mt-3 text-xs text-reject">{err}</p>}
       </main>
     </>
+  );
+}
+
+/**
+ * One of the four checks in `verify_attestation`. Collapsed it reads as a
+ * verdict; expanded it shows the two values the program compared, so the claim
+ * is inspectable rather than asserted.
+ */
+function CheckRow({ check }: { check: AttestationCheckDTO }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div
+      className={`rounded-2xl border ${
+        check.ok ? "border-ash bg-carbon/40" : "border-reject/50 bg-reject/5"
+      }`}
+    >
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center gap-3 px-4 py-3 text-left"
+      >
+        <HugeiconsIcon
+          icon={check.ok ? CheckmarkCircle02Icon : CancelCircleIcon}
+          size={18}
+          className={check.ok ? "text-verify" : "text-reject"}
+        />
+        <span className={`flex-1 text-sm ${check.ok ? "text-mist" : "text-reject"}`}>
+          {check.label}
+        </span>
+        <span className="text-[11px] text-steel">{open ? "hide" : "details"}</span>
+      </button>
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
+          >
+            <div className="border-t border-ash/60 px-4 py-3">
+              <p className="text-xs text-fog">
+                <span className="text-steel">Prevents: </span>
+                {check.guards}
+              </p>
+              <div className="mt-3 flex flex-col gap-2">
+                <ValueRow label="Expected" value={check.expected} />
+                <ValueRow label="From quote" value={check.actual} mismatch={!check.ok} />
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function ValueRow({
+  label,
+  value,
+  mismatch,
+}: {
+  label: string;
+  value: string;
+  mismatch?: boolean;
+}) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <span className="text-[10px] uppercase tracking-wider text-steel">{label}</span>
+      <span
+        className={`break-all font-mono text-[11px] ${mismatch ? "text-reject" : "text-mist"}`}
+      >
+        {value || "—"}
+      </span>
+    </div>
   );
 }
 
