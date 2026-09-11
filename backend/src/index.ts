@@ -20,6 +20,14 @@ app.use(
 );
 app.use(express.json({ limit: "2mb" }));
 
+app.get("/", (_req, res) => {
+    res.json({
+        status: "ok",
+        service: "veilai-backend",
+        db: dbConfigured(),
+        auth: authConfigured(),
+    });
+});
 app.get("/health", (_req, res) => {
     res.json({
         status: "ok",
