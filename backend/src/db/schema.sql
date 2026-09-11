@@ -76,6 +76,14 @@ create table if not exists job_events (
 alter table jobs add column if not exists output_recipient_pubkey text;
 alter table jobs add column if not exists attestation_checks jsonb;
 alter table jobs add column if not exists attestation_quote jsonb;
+-- On-chain provenance: PDA + the signature for each lifecycle transaction.
+alter table jobs add column if not exists job_pda text;
+alter table jobs add column if not exists on_chain_creator text;
+alter table jobs add column if not exists create_tx text;
+alter table jobs add column if not exists escrow_tx text;
+alter table jobs add column if not exists execute_tx text;
+alter table jobs add column if not exists verify_tx text;
+alter table jobs add column if not exists on_chain_reason text;
 
 create index if not exists jobs_creator_idx on jobs(creator);
 create index if not exists jobs_agent_idx on jobs(agent_id);

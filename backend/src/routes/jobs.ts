@@ -1,9 +1,17 @@
 import { Router } from "express";
 import { z } from "zod";
 import { db } from "../db/client.js";
-import { JobStatus, AttestationStatus, verifyQuoteDetailed, type SealedBox } from "@veilai/shared";
+import {
+  JobStatus,
+  AttestationStatus,
+  verifyQuoteDetailed,
+  commitString,
+  newX25519Keypair,
+  type SealedBox,
+} from "@veilai/shared";
 import { enclaveFromEnv } from "../enclave/stub.js";
-import { newX25519Keypair } from "@veilai/shared";
+import { chainEnabled } from "../chain/client.js";
+import { createJobOnChain, verifyOnChain } from "../chain/lifecycle.js";
 
 export const jobsRouter = Router();
 
@@ -84,49 +92,147 @@ jobsRouter.post("/", async (req, res, next) => {
       .single();
     if (error) throw error;
     await recordEvent(body.id, "created");
-    res.status(201).json({ job: data });
+
+    // Put the job on-chain and escrow the budget. The row exists either way, so
+    // a chain failure degrades to an off-chain-only job rather than losing it —
+    // but the job then carries no proof, and `job_pda` stays null to say so.
+    let job = data;
+    if (chainEnabled()) {
+      try {
+        const oc = await createJobOnChain({
+          jobId: body.jobId,
+          agentAuthority: body.provider,
+          promptCiphertextCommitment: body.promptCiphertextCommitment,
+          inputCommitment: body.inputCommitment,
+          nonce: body.nonce,
+          budget: body.budget,
+        });
+        const { data: updated } = await db()
+          .from("jobs")
+          .update({
+            status: JobStatus.Escrowed,
+            job_pda: oc.jobPda,
+            on_chain_creator: oc.onChainCreator,
+            create_tx: oc.createSignature,
+            escrow_tx: oc.escrowSignature,
+          })
+          .eq("id", body.id)
+          .select()
+          .single();
+        if (updated) job = updated;
+        await recordEvent(body.id, "escrowed", { jobPda: oc.jobPda }, oc.escrowSignature);
+      } catch (e) {
+        console.error("on-chain create failed:", (e as Error).message);
+        await recordEvent(body.id, "chain_error", {
+          step: "create",
+          error: (e as Error).message,
+        });
+      }
+    }
+    res.status(201).json({ job });
   } catch (e) {
     next(e);
   }
 });
 
 /**
- * Execute the job inside the stub enclave: decrypt → infer → attest.
- * Produces the attestation quote + sealed output and records them. The on-chain
- * `verify_attestation` + settlement submission is driven during devnet
- * integration (Phase 7); here we run the enclave and mirror the result.
+ * Execute the job inside the stub enclave: decrypt → infer → attest → verify
+ * on-chain → settle or refund.
+ *
+ * `tamper: true` submits a different output commitment than the one the enclave
+ * signed, simulating a provider that returns something other than what it ran.
+ * The program catches it; this is the demo's rejection path.
  */
 jobsRouter.post("/:id/execute", async (req, res, next) => {
   try {
     const userPublicKeyB58 = z.string().parse(req.body?.userPublicKey);
+    const tamper = z.boolean().optional().parse(req.body?.tamper) ?? false;
     const { data: job, error } = await db().from("jobs").select("*").eq("id", req.params.id).single();
     if (error) throw error;
 
     await setStatus(job.id, JobStatus.Executing);
     await recordEvent(job.id, "executing");
 
+    const modelId = job.model_id ?? "claude-opus-4-8";
     const out = await enclave.run({
       promptBox: job.prompt_ciphertext as SealedBox,
       userPublicKeyB58,
-      modelId: job.model_id ?? "claude-opus-4-8",
+      modelId,
       nonce: job.nonce,
     });
 
-    // Off-chain mirror of the on-chain verifier's checks (authoritative check is on-chain).
+    // What the provider *submits* — tampering swaps the real commitment for a
+    // different one while keeping the enclave's signature over the real output.
+    const submittedOutputCommitment = tamper
+      ? commitString(`tampered:${out.outputCommitment}`)
+      : out.outputCommitment;
+
+    // The agent's registered quoting key is the allowlist — comparing the quote
+    // against its own key would make this check vacuous.
+    const { data: agent } = await db()
+      .from("agents")
+      .select("quoting_key")
+      .eq("id", job.agent_id)
+      .single();
+
+    // Off-chain mirror, for the per-check UI breakdown. The verdict that decides
+    // payment is the program's, below.
     const check = verifyQuoteDetailed(out.quote, {
       inputCommitment: out.inputCommitment,
-      outputCommitment: out.outputCommitment,
-      modelId: job.model_id ?? "claude-opus-4-8",
+      outputCommitment: submittedOutputCommitment,
+      modelId,
       nonce: job.nonce,
-      allowlistedQuotingKey: out.quote.quotingKey,
+      allowlistedQuotingKey: agent?.quoting_key ?? out.quote.quotingKey,
       expectedMeasurement: job.expected_measurement,
     });
 
-    const verified = check.ok;
+    let verified = check.ok;
+    let reason = check.reason ?? null;
+    const chainUpdate: Record<string, unknown> = {};
+
+    if (chainEnabled() && job.job_pda) {
+      try {
+        const verdict = await verifyOnChain({
+          jobId: job.job_id,
+          agentAuthority: job.provider,
+          quote: out.quote,
+          submittedOutputCommitment,
+        });
+        // The chain is authoritative — if it disagrees with the mirror, it wins.
+        verified = verdict.verified;
+        reason = verdict.reason ?? reason;
+        chainUpdate.execute_tx = verdict.executeSignature;
+        chainUpdate.verify_tx = verdict.verifySignature;
+        chainUpdate.settlement_tx = verdict.settlementSignature;
+        chainUpdate.on_chain_reason = verdict.reason;
+        chainUpdate.settled = verdict.verified;
+        await recordEvent(
+          job.id,
+          verdict.verified ? "verified" : "rejected",
+          { onChain: true, reason: verdict.reason },
+          verdict.verifySignature,
+        );
+        await recordEvent(
+          job.id,
+          verdict.verified ? "settled" : "refunded",
+          { onChain: true },
+          verdict.settlementSignature ?? undefined,
+        );
+      } catch (e) {
+        console.error("on-chain verify failed:", (e as Error).message);
+        await recordEvent(job.id, "chain_error", {
+          step: "verify",
+          error: (e as Error).message,
+        });
+      }
+    } else {
+      await recordEvent(job.id, verified ? "verified" : "rejected", { onChain: false, reason });
+    }
+
     await db()
       .from("jobs")
       .update({
-        output_commitment: out.outputCommitment,
+        output_commitment: submittedOutputCommitment,
         output_ciphertext: out.outputBox,
         // Recorded so a viewer can tell "sealed to a key I don't hold" apart
         // from "decryption failed" without attempting a doomed decrypt.
@@ -134,12 +240,23 @@ jobsRouter.post("/:id/execute", async (req, res, next) => {
         attestation_checks: check.checks,
         attestation_quote: out.quote,
         attestation_status: verified ? AttestationStatus.Verified : AttestationStatus.Rejected,
-        status: verified ? JobStatus.Verified : JobStatus.Rejected,
+        status: verified
+          ? chainUpdate.settled
+            ? JobStatus.Settled
+            : JobStatus.Verified
+          : JobStatus.Rejected,
+        ...chainUpdate,
       })
       .eq("id", job.id);
-    await recordEvent(job.id, verified ? "verified" : "rejected", { reason: check.reason ?? null });
 
-    res.json({ ok: true, verified, outputCommitment: out.outputCommitment, quote: out.quote });
+    res.json({
+      ok: true,
+      verified,
+      reason,
+      onChain: Boolean(chainUpdate.verify_tx),
+      outputCommitment: submittedOutputCommitment,
+      quote: out.quote,
+    });
   } catch (e) {
     next(e);
   }
@@ -165,6 +282,8 @@ async function setStatus(id: string, status: JobStatus) {
   await db().from("jobs").update({ status }).eq("id", id);
 }
 
-async function recordEvent(jobId: string, kind: string, detail?: unknown) {
-  await db().from("job_events").insert({ job_id: jobId, kind, detail: detail ?? null });
+async function recordEvent(jobId: string, kind: string, detail?: unknown, signature?: string) {
+  await db()
+    .from("job_events")
+    .insert({ job_id: jobId, kind, detail: detail ?? null, signature: signature ?? null });
 }
