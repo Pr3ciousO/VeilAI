@@ -8,6 +8,7 @@ import {
   explorerTx,
   explorerAddress,
   type Job,
+  type Agent,
   type AttestationCheckDTO,
 } from "@/lib/api";
 import { usdc, short } from "@/lib/format";
@@ -23,10 +24,14 @@ export default function JobDetail({ params }: PageProps<"/jobs/[id]">) {
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [revealErr, setRevealErr] = useState<string | null>(null);
+  const [agent, setAgent] = useState<Agent | null>(null);
 
   async function refresh() {
     const r = await api.job(id);
     setJob(r.job);
+    // The agent names the model the attestation is bound to — the thing the
+    // buyer is actually being assured of.
+    api.agent(r.job.agent_id).then((a) => setAgent(a.agent)).catch(() => setAgent(null));
   }
   useEffect(() => {
     refresh().catch((e) => setErr(e.message));
@@ -100,7 +105,16 @@ export default function JobDetail({ params }: PageProps<"/jobs/[id]">) {
             <h1 className="text-2xl font-semibold tracking-tight text-snow">
               {job.title ?? `Job #${job.job_id}`}
             </h1>
-            <p className="mt-1 text-sm text-fog">Provider {short(job.provider)}</p>
+            <p className="mt-1 text-sm text-fog">
+              {agent ? (
+                <>
+                  <span className="text-mist">{agent.name}</span> ·{" "}
+                  <span className="font-mono">{agent.model_id}</span>
+                </>
+              ) : (
+                `Provider ${short(job.provider)}`
+              )}
+            </p>
           </div>
           <StatusChip status={job.status as never} />
         </div>

@@ -7,9 +7,9 @@ import { cn } from "@/lib/cn";
 import { PillButton } from "@/components/ui";
 
 const links = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/agents", label: "Agents" },
-  { href: "/create", label: "New job" },
+  { href: "/agents", label: "Marketplace" },
+  { href: "/dashboard", label: "My jobs" },
+  { href: "/agents/new", label: "List an agent" },
 ];
 
 export function AppNav() {
