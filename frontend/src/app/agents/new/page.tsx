@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { usePrivy } from "@privy-io/react-auth";
 import { AppNav } from "@/components/AppNav";
 import { GlassCard, PillButton, PillInput, GlassTextArea, Badge } from "@/components/ui";
 import { api } from "@/lib/api";
@@ -16,7 +15,6 @@ const MODELS = [
 
 export default function NewAgent() {
   const router = useRouter();
-  const { user } = usePrivy();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [systemPrompt, setSystemPrompt] = useState("");
@@ -42,7 +40,6 @@ export default function NewAgent() {
           .split(",")
           .map((c) => c.trim())
           .filter(Boolean),
-        creator: user?.id,
       });
       router.push(`/agents#${agent.id}`);
     } catch (e) {

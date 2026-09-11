@@ -25,7 +25,6 @@ const SealedBoxSchema = z.object({ epk: z.string(), nonce: z.string(), ct: z.str
 const CreateJob = z.object({
   id: z.string(), // job PDA (base58)
   jobId: z.number().int().nonnegative(),
-  creator: z.string(),
   agentId: z.string(),
   provider: z.string(),
   title: z.string().optional(),

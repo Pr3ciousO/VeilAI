@@ -2,7 +2,6 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { usePrivy } from "@privy-io/react-auth";
 import { AppNav } from "@/components/AppNav";
 import { GlassCard, PillButton, PillInput, GlassTextArea, Badge } from "@/components/ui";
 import { api, type Agent } from "@/lib/api";
@@ -35,7 +34,6 @@ export default function CreateJobPage() {
 
 function CreateJob() {
   const router = useRouter();
-  const { user } = usePrivy();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [agentId, setAgentId] = useState<string>("");
   const [task, setTask] = useState("");
@@ -68,12 +66,10 @@ function CreateJob() {
       const nonce = bytesToHex(randomBytes(32));
       const jobId = Math.floor(Math.random() * 1_000_000_000);
       const id = `job_${jobId}`;
-      const creator = user?.id ?? "anon";
 
       await api.jobsCreate({
         id,
         jobId,
-        creator,
         agentId: agent.id,
         provider: agent.authority,
         title: title || task.slice(0, 48),

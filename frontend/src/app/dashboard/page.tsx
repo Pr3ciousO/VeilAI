@@ -24,7 +24,7 @@ export default function Dashboard() {
     }
     if (!user?.id) return;
     api
-      .jobs(user.id)
+      .jobs()
       .then((r) => setJobs(r.jobs))
       .catch((e) => setErr(e.message));
   }, [ready, authenticated, user?.id, router]);

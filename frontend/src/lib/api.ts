@@ -1,10 +1,27 @@
+import { getAccessToken } from "@privy-io/react-auth";
+
 const BASE = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4000";
 
+/**
+ * Attaches the Privy access token when there's a session. The API derives the
+ * caller's identity from this token, so anything owner-scoped fails without it.
+ */
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
-    ...init,
-    headers: { "content-type": "application/json", ...(init?.headers ?? {}) },
-  });
+  const headers: Record<string, string> = {
+    "content-type": "application/json",
+    ...((init?.headers as Record<string, string>) ?? {}),
+  };
+
+  if (typeof window !== "undefined") {
+    try {
+      const token = await getAccessToken();
+      if (token) headers.authorization = `Bearer ${token}`;
+    } catch {
+      /* anonymous — public endpoints still work */
+    }
+  }
+
+  const res = await fetch(`${BASE}${path}`, { ...init, headers });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error ?? `${res.status} ${res.statusText}`);
@@ -98,13 +115,11 @@ export interface CreateAgentBody {
   maxTokens: number;
   price: number;
   capabilities: string[];
-  creator?: string;
 }
 
 export interface CreateJobBody {
   id: string;
   jobId: number;
-  creator: string;
   agentId: string;
   provider: string;
   title?: string;
@@ -121,11 +136,11 @@ export const api = {
   health: () => req<{ status: string; db: boolean }>("/health"),
   agents: () => req<{ agents: Agent[] }>("/agents"),
   agent: (id: string) => req<{ agent: Agent }>(`/agents/${id}`),
-  myAgents: (creator: string) => req<{ agents: Agent[] }>(`/agents?creator=${creator}`),
+  myAgents: () => req<{ agents: Agent[] }>("/agents?mine=1"),
   agentsCreate: (body: CreateAgentBody) =>
     req<{ agent: Agent }>("/agents", { method: "POST", body: JSON.stringify(body) }),
-  jobs: (creator?: string) =>
-    req<{ jobs: Job[] }>(`/jobs${creator ? `?creator=${creator}` : ""}`),
+  /** Always the signed-in user's own jobs — scoped server-side by token. */
+  jobs: () => req<{ jobs: Job[] }>("/jobs"),
   job: (id: string) => req<{ job: Job }>(`/jobs/${id}`),
   /** Verification evidence only — safe for logged-out visitors. */
   showcase: () =>
