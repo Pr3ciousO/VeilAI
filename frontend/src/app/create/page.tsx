@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { usePrivy } from "@privy-io/react-auth";
 import { AppNav } from "@/components/AppNav";
@@ -11,7 +11,29 @@ import { sealTo, commitString, commitJobInput } from "@veilai/shared";
 import { randomBytes, bytesToHex } from "@noble/hashes/utils";
 import { motion } from "framer-motion";
 
-export default function CreateJob() {
+/**
+ * `useSearchParams` opts the tree below it out of prerendering, so the form
+ * lives inside a Suspense boundary and the shell around it stays static.
+ */
+export default function CreateJobPage() {
+  return (
+    <Suspense
+      fallback={
+        <>
+          <AppNav />
+          <main className="mx-auto w-full max-w-2xl flex-1 px-6 py-10">
+            <div className="h-8 w-64 animate-pulse rounded-pill bg-carbon" />
+            <div className="mt-8 h-96 animate-pulse rounded-3xl bg-carbon/60" />
+          </main>
+        </>
+      }
+    >
+      <CreateJob />
+    </Suspense>
+  );
+}
+
+function CreateJob() {
   const router = useRouter();
   const { user } = usePrivy();
   const [agents, setAgents] = useState<Agent[]>([]);
