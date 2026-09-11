@@ -19,12 +19,22 @@ pub enum AttestationStatus {
     Rejected,
 }
 
-/// A registered AI provider/agent. One agent per provider wallet in the MVP.
+/// A registered AI agent. An authority may register many agents, distinguished
+/// by `agent_id` — a marketplace operator holds one wallet and many listings.
 #[account]
 pub struct Agent {
     pub authority: Pubkey,
+    /// Unique per authority; part of the PDA seed.
+    pub agent_id: u64,
     /// Model identifier used when recomputing the attestation report data.
     pub model_id: String,
+    /// sha256 over the agent's definition (system prompt ‖ model ‖ params).
+    ///
+    /// Bound into every job's `input_commitment`, so an attestation proves which
+    /// agent definition ran — not merely that *some* enclave ran. Pinning it
+    /// here makes a silently edited agent detectable: the commitment a client
+    /// used is checkable against the one the agent advertises.
+    pub config_commitment: [u8; 32],
     /// Allowlisted enclave measurement (MRTD).
     pub expected_measurement: [u8; MEASUREMENT_LEN],
     /// ed25519 public key of the enclave quoting key (stub TEE key in the MVP).
@@ -42,7 +52,9 @@ pub struct Agent {
 impl Agent {
     pub const SPACE: usize = 8
         + 32                        // authority
+        + 8                         // agent_id
         + (4 + MAX_MODEL_ID_LEN)    // model_id
+        + 32                        // config_commitment
         + MEASUREMENT_LEN           // expected_measurement
         + 32                        // quoting_key
         + 8                         // price

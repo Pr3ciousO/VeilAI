@@ -17,6 +17,13 @@ export const config = {
   anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? "",
   enclaveQuotingSecret: process.env.ENCLAVE_QUOTING_SECRET ?? "",
   enclaveMeasurement: process.env.ENCLAVE_MEASUREMENT ?? "",
+  /**
+   * x25519 secret prompts are sealed to. Must persist across restarts —
+   * a per-process key would make every stored ciphertext (job prompts, agent
+   * system prompts) permanently unopenable on the next boot. A real TEE has the
+   * equivalent in its sealing key.
+   */
+  enclaveX25519Secret: process.env.ENCLAVE_X25519_SECRET ?? "",
   supabaseUrl: process.env.SUPABASE_URL ?? "",
   supabaseServiceKey: process.env.SUPABASE_SERVICE_ROLE_KEY ?? "",
 };

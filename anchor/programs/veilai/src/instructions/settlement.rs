@@ -193,7 +193,7 @@ pub struct SettleDirect<'info> {
     pub job: Account<'info, Job>,
     #[account(
         mut,
-        seeds = [AGENT_SEED, agent.authority.as_ref()],
+        seeds = [AGENT_SEED, agent.authority.as_ref(), &agent.agent_id.to_le_bytes()],
         bump = agent.bump,
         address = job.agent @ VeilError::Unauthorized
     )]
@@ -228,7 +228,7 @@ pub struct RefundDirect<'info> {
     pub job: Account<'info, Job>,
     #[account(
         mut,
-        seeds = [AGENT_SEED, agent.authority.as_ref()],
+        seeds = [AGENT_SEED, agent.authority.as_ref(), &agent.agent_id.to_le_bytes()],
         bump = agent.bump,
         address = job.agent @ VeilError::Unauthorized
     )]

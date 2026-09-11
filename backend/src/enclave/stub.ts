@@ -15,10 +15,13 @@ import {
   buildQuote,
   commitString,
   commit,
+  commitAgentConfig,
+  commitJobInput,
   hexToBytes,
   edPublicFromSecret,
   type SealedBox,
   type AttestationQuote,
+  type AgentConfig,
 } from "@veilai/shared";
 import { config } from "../config.js";
 
@@ -27,7 +30,8 @@ export interface EnclaveInput {
   promptBox: SealedBox;
   /** x25519 public key to seal the output back to (the creator). */
   userPublicKeyB58: string;
-  modelId: string;
+  /** The agent definition to run — its system prompt is also sealed. */
+  agentConfig: AgentConfig;
   /** Per-job nonce (hex) binding the attestation. */
   nonce: string;
 }
@@ -36,6 +40,8 @@ export interface EnclaveOutput {
   quote: AttestationQuote;
   inputCommitment: string;
   outputCommitment: string;
+  /** The agent definition this run was bound to. */
+  configCommitment: string;
   /** Output sealed to the user; only the creator can open it. */
   outputBox: SealedBox;
 }
@@ -64,37 +70,44 @@ export class StubEnclave {
     // 1. Decrypt the prompt (only possible inside the enclave).
     const promptBytes = await openSealed(this.x25519Secret, input.promptBox);
     const prompt = new TextDecoder().decode(promptBytes);
-    const inputCommitment = commitString(prompt);
 
-    // 2. Run inference.
-    const output = await this.infer(input.modelId, prompt);
+    // 2. Bind the agent definition into the input commitment. The client
+    //    computed the same value from the agent it *chose*; if this enclave ran
+    //    a different config, report_data diverges and the chain rejects it.
+    const configCommitment = commitAgentConfig(input.agentConfig);
+    const inputCommitment = commitJobInput({ configCommitment, prompt });
+
+    // 3. Run inference under the agent's own system prompt.
+    const output = await this.infer(input.agentConfig, prompt);
     const outputCommitment = commitString(output);
 
-    // 3. Seal the output back to the user.
+    // 4. Seal the output back to the user.
     const outputBox = await sealTo(input.userPublicKeyB58, new TextEncoder().encode(output));
 
-    // 4. Emit the attestation quote (signs sha256(report_data ‖ mrtd)).
+    // 5. Emit the attestation quote (signs sha256(report_data ‖ mrtd)).
     const quote = buildQuote({
       inputCommitment,
       outputCommitment,
-      modelId: input.modelId,
+      modelId: input.agentConfig.modelId,
       nonce: input.nonce,
       mrtd: this.measurementHex,
       quotingSecret: this.quotingSecret,
       quotingKeyB58: this.quotingKeyB58,
     });
 
-    return { quote, inputCommitment, outputCommitment, outputBox };
+    return { quote, inputCommitment, outputCommitment, configCommitment, outputBox };
   }
 
-  private async infer(modelId: string, prompt: string): Promise<string> {
+  private async infer(agentConfig: AgentConfig, prompt: string): Promise<string> {
     if (!config.anthropicApiKey) {
       // Offline fallback so the pipeline is demoable without a key.
       return `[STUB ENCLAVE offline] Echoed analysis of a ${prompt.length}-char prompt (commitment ${commit(new TextEncoder().encode(prompt)).slice(0, 12)}…).`;
     }
     const msg = await this.anthropic.messages.create({
-      model: modelId || "claude-opus-4-8",
-      max_tokens: 4096,
+      model: agentConfig.modelId || "claude-opus-4-8",
+      max_tokens: agentConfig.maxTokens,
+      temperature: agentConfig.temperature,
+      system: agentConfig.systemPrompt,
       messages: [{ role: "user", content: prompt }],
     });
     return msg.content

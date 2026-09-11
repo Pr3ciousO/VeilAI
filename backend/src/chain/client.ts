@@ -33,7 +33,7 @@ export interface ChainClient {
   /** The agent operator — signs execute_marker and verify_attestation. */
   provider: Keypair;
   usdcMint: PublicKey;
-  agentPda: (authority: PublicKey) => PublicKey;
+  agentPda: (authority: PublicKey, agentId: anchor.BN) => PublicKey;
   jobPda: (creator: PublicKey, jobId: anchor.BN) => PublicKey;
   escrowAuthority: (jobPda: PublicKey) => PublicKey;
 }
@@ -76,8 +76,11 @@ export function getChain(): ChainClient {
     creator,
     provider: providerKp,
     usdcMint: new PublicKey(config.usdcMint),
-    agentPda: (authority) =>
-      PublicKey.findProgramAddressSync([AGENT_SEED, authority.toBuffer()], program.programId)[0],
+    agentPda: (authority, agentId) =>
+      PublicKey.findProgramAddressSync(
+        [AGENT_SEED, authority.toBuffer(), agentId.toArrayLike(Buffer, "le", 8)],
+        program.programId,
+      )[0],
     jobPda: (creatorKey, jobId) =>
       PublicKey.findProgramAddressSync(
         [JOB_SEED, creatorKey.toBuffer(), jobId.toArrayLike(Buffer, "le", 8)],

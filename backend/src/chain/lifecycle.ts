@@ -19,6 +19,39 @@ import { getChain } from "./client.js";
 
 const arr = (hex: string) => Array.from(hexToBytes(hex));
 
+/**
+ * register_agent. The platform wallet is the authority for marketplace-listed
+ * agents (Privy users have no funded wallet), so `agent_id` is what separates
+ * one listing from another under that single authority.
+ */
+export async function registerAgentOnChain(params: {
+  agentId: number;
+  modelId: string;
+  configCommitment: string;
+  measurement: string;
+  quotingKeyB58: string;
+  price: number;
+}): Promise<{ agentPda: string; authority: string; signature: string }> {
+  const chain = getChain();
+  const authority = chain.provider.publicKey;
+  const agentPda = chain.agentPda(authority, new anchor.BN(params.agentId));
+
+  const signature = await chain.program.methods
+    .registerAgent(
+      new anchor.BN(params.agentId),
+      params.modelId,
+      arr(params.configCommitment),
+      arr(params.measurement),
+      Array.from(bs58.decode(params.quotingKeyB58)),
+      new anchor.BN(params.price),
+    )
+    .accountsPartial({ agent: agentPda, authority })
+    .signers([chain.provider])
+    .rpc();
+
+  return { agentPda: agentPda.toBase58(), authority: authority.toBase58(), signature };
+}
+
 export interface OnChainCreate {
   jobPda: string;
   onChainCreator: string;
@@ -32,7 +65,8 @@ export interface OnChainCreate {
  */
 export async function createJobOnChain(params: {
   jobId: number;
-  agentAuthority: string;
+  /** The agent's PDA, as recorded when it was registered. */
+  agentPda: string;
   promptCiphertextCommitment: string;
   inputCommitment: string;
   nonce: string;
@@ -42,7 +76,7 @@ export async function createJobOnChain(params: {
   const jobId = new anchor.BN(params.jobId);
   const creator = chain.creator.publicKey;
   const jobPda = chain.jobPda(creator, jobId);
-  const agentPda = chain.agentPda(new PublicKey(params.agentAuthority));
+  const agentPda = new PublicKey(params.agentPda);
 
   const createSignature = await chain.program.methods
     .createJob(
@@ -105,7 +139,8 @@ export interface OnChainVerdict {
  */
 export async function verifyOnChain(params: {
   jobId: number;
-  agentAuthority: string;
+  /** The agent's PDA, as recorded when it was registered. */
+  agentPda: string;
   quote: AttestationQuote;
   /** Commitment the provider submits — differs from the signed one when tampered. */
   submittedOutputCommitment: string;
@@ -113,8 +148,7 @@ export async function verifyOnChain(params: {
   const chain = getChain();
   const jobId = new anchor.BN(params.jobId);
   const jobPda = chain.jobPda(chain.creator.publicKey, jobId);
-  const agentAuthority = new PublicKey(params.agentAuthority);
-  const agentPda = chain.agentPda(agentAuthority);
+  const agentPda = new PublicKey(params.agentPda);
 
   const executeSignature = await chain.program.methods
     .executeMarker()

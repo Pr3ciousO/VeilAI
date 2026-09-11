@@ -15,9 +15,16 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
 export interface Agent {
   id: string;
   authority: string;
+  agent_id: number | null;
   name: string;
   description: string | null;
   model_id: string;
+  /** sha256 of the agent's definition; bound into every job it runs. */
+  config_commitment: string;
+  temperature: number;
+  max_tokens: number;
+  creator: string | null;
+  register_tx: string | null;
   expected_measurement: string;
   quoting_key: string;
   price: number;
@@ -82,6 +89,18 @@ export interface SealedBoxDTO {
   ct: string;
 }
 
+export interface CreateAgentBody {
+  name: string;
+  description?: string;
+  systemPrompt: string;
+  modelId: string;
+  temperature: number;
+  maxTokens: number;
+  price: number;
+  capabilities: string[];
+  creator?: string;
+}
+
 export interface CreateJobBody {
   id: string;
   jobId: number;
@@ -102,6 +121,9 @@ export const api = {
   health: () => req<{ status: string; db: boolean }>("/health"),
   agents: () => req<{ agents: Agent[] }>("/agents"),
   agent: (id: string) => req<{ agent: Agent }>(`/agents/${id}`),
+  myAgents: (creator: string) => req<{ agents: Agent[] }>(`/agents?creator=${creator}`),
+  agentsCreate: (body: CreateAgentBody) =>
+    req<{ agent: Agent }>("/agents", { method: "POST", body: JSON.stringify(body) }),
   jobs: (creator?: string) =>
     req<{ jobs: Job[] }>(`/jobs${creator ? `?creator=${creator}` : ""}`),
   job: (id: string) => req<{ job: Job }>(`/jobs/${id}`),

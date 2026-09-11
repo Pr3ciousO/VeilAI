@@ -6,20 +6,18 @@ import {
   AttestationStatus,
   verifyQuoteDetailed,
   commitString,
-  newX25519Keypair,
+  openSealed,
   type SealedBox,
+  type AgentConfig,
 } from "@veilai/shared";
 import { enclaveFromEnv } from "../enclave/stub.js";
+import { enclaveSecret, enclavePublicKey } from "../enclave/key.js";
 import { chainEnabled } from "../chain/client.js";
 import { createJobOnChain, verifyOnChain } from "../chain/lifecycle.js";
 
 export const jobsRouter = Router();
 
-// The enclave's x25519 keypair is process-local for the MVP. In production the
-// secret lives only inside the TEE; the public key is published for clients to
-// seal prompts against.
-const enclaveKeypair = newX25519Keypair();
-const enclave = enclaveFromEnv(enclaveKeypair.secret);
+const enclave = enclaveFromEnv(enclaveSecret());
 
 const SealedBoxSchema = z.object({ epk: z.string(), nonce: z.string(), ct: z.string() });
 
@@ -41,7 +39,7 @@ const CreateJob = z.object({
 
 /** Publish the enclave's x25519 public key so clients can seal prompts to it. */
 jobsRouter.get("/enclave/pubkey", (_req, res) => {
-  res.json({ x25519PublicKey: enclaveKeypair.publicB58 });
+  res.json({ x25519PublicKey: enclavePublicKey() });
 });
 
 jobsRouter.get("/", async (req, res, next) => {
@@ -101,7 +99,7 @@ jobsRouter.post("/", async (req, res, next) => {
       try {
         const oc = await createJobOnChain({
           jobId: body.jobId,
-          agentAuthority: body.provider,
+          agentPda: body.agentId,
           promptCiphertextCommitment: body.promptCiphertextCommitment,
           inputCommitment: body.inputCommitment,
           nonce: body.nonce,
@@ -156,17 +154,32 @@ jobsRouter.post("/:id/execute", async (req, res, next) => {
     // `create_job` copies model_id from the Agent account, so report_data is
     // bound to the *agent's* model. Deriving it from anywhere else (there is no
     // jobs.model_id column) makes the on-chain check fail on honest jobs.
-    const { data: agent } = await db()
+    const { data: agent, error: agentErr } = await db()
       .from("agents")
-      .select("model_id, quoting_key")
+      .select("model_id, quoting_key, system_prompt_ciphertext, temperature, max_tokens")
       .eq("id", job.agent_id)
       .single();
-    const modelId = agent?.model_id ?? "claude-opus-4-8";
+    if (agentErr) throw agentErr;
+
+    // The agent's system prompt is sealed to the enclave, so only the enclave
+    // opens it — the operator never sees a lister's instructions in the clear.
+    const systemPrompt = agent.system_prompt_ciphertext
+      ? new TextDecoder().decode(
+          await openSealed(enclaveSecret(), agent.system_prompt_ciphertext as SealedBox),
+        )
+      : "";
+    const agentConfig: AgentConfig = {
+      systemPrompt,
+      modelId: agent.model_id,
+      temperature: agent.temperature ?? 1,
+      maxTokens: agent.max_tokens ?? 4096,
+    };
+    const modelId = agentConfig.modelId;
 
     const out = await enclave.run({
       promptBox: job.prompt_ciphertext as SealedBox,
       userPublicKeyB58,
-      modelId,
+      agentConfig,
       nonce: job.nonce,
     });
 
@@ -195,7 +208,7 @@ jobsRouter.post("/:id/execute", async (req, res, next) => {
       try {
         const verdict = await verifyOnChain({
           jobId: job.job_id,
-          agentAuthority: job.provider,
+          agentPda: job.agent_id,
           quote: out.quote,
           submittedOutputCommitment,
         });

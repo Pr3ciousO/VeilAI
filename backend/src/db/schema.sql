@@ -19,8 +19,26 @@ create table if not exists agents (
   rejected              bigint not null default 0,
   reputation            integer not null default 10000, -- bps
   avg_latency_ms        integer,
-  created_at            timestamptz not null default now()
+  created_at            timestamptz not null default now(),
+  -- Marketplace: an authority may list many agents, keyed by agent_id.
+  agent_id              bigint,
+  -- sha256(system prompt ‖ model ‖ params) — bound into every job's attestation.
+  config_commitment     text,
+  -- The system prompt is the agent's IP: stored sealed to the enclave, never plaintext.
+  system_prompt_ciphertext jsonb,
+  temperature           real not null default 1.0,
+  max_tokens            integer not null default 4096,
+  creator               text,                       -- Privy user id of the lister
+  register_tx           text                        -- register_agent signature
 );
+
+alter table agents add column if not exists agent_id bigint;
+alter table agents add column if not exists config_commitment text;
+alter table agents add column if not exists system_prompt_ciphertext jsonb;
+alter table agents add column if not exists temperature real not null default 1.0;
+alter table agents add column if not exists max_tokens integer not null default 4096;
+alter table agents add column if not exists creator text;
+alter table agents add column if not exists register_tx text;
 
 -- ─── Jobs (mirror of on-chain Job + off-chain refs) ─────────────────────
 do $$ begin

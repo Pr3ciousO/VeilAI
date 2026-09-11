@@ -23,18 +23,23 @@ declare_id!("86unmnYc6pGfmmCwFLBjbiVT9pd3vJA5CaAzyreYewPT");
 pub mod veilai {
     use super::*;
 
-    /// Register an AI provider/agent with its allowlisted enclave measurement,
-    /// quoting key, model id, and price.
+    /// Register an AI agent with its allowlisted enclave measurement, quoting
+    /// key, model id, config commitment, and price. `agent_id` is unique per
+    /// authority, so one operator can list many agents.
     pub fn register_agent(
         ctx: Context<RegisterAgent>,
+        agent_id: u64,
         model_id: String,
+        config_commitment: [u8; 32],
         expected_measurement: [u8; MEASUREMENT_LEN],
         quoting_key: [u8; 32],
         price: u64,
     ) -> Result<()> {
         instructions::register_agent::handler(
             ctx,
+            agent_id,
             model_id,
+            config_commitment,
             expected_measurement,
             quoting_key,
             price,

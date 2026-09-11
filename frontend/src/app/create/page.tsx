@@ -7,7 +7,7 @@ import { AppNav } from "@/components/AppNav";
 import { GlassCard, PillButton, PillInput, GlassTextArea, Badge } from "@/components/ui";
 import { api, type Agent } from "@/lib/api";
 import { usdc } from "@/lib/format";
-import { sealTo, commitString } from "@veilai/shared";
+import { sealTo, commitString, commitJobInput } from "@veilai/shared";
 import { randomBytes, bytesToHex } from "@noble/hashes/utils";
 import { motion } from "framer-motion";
 
@@ -53,7 +53,12 @@ export default function CreateJob() {
         title: title || task.slice(0, 48),
         budget: Math.round(parseFloat(budget) * 1_000_000),
         promptCiphertextCommitment: commitString(JSON.stringify(box)),
-        inputCommitment: commitString(task),
+        // Binds the chosen agent's definition into the attestation: if the
+        // enclave runs a different config, report_data diverges on-chain.
+        inputCommitment: commitJobInput({
+          configCommitment: agent.config_commitment,
+          prompt: task,
+        }),
         expectedMeasurement: agent.expected_measurement,
         nonce,
         settlementId: nonce,
